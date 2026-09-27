@@ -262,6 +262,39 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         showToast(result.message, 4000);
       }
+
+      // Enviar diagnóstico completo a Firebase en segundo plano para análisis del agente
+      if (typeof TelemetryLogger !== 'undefined') {
+        TelemetryLogger.sendTelemetry({
+          rawSensors: readings.rawSensors || {},
+          camera3D: {
+            azimuthTrue: readings.azimuthTrue,
+            azimuthMag: readings.azimuthMag,
+            pitch: readings.pitchDeg,
+            roll: readings.rollDeg,
+            declination: readings.declination,
+            vEast: readings.camVector ? readings.camVector.vEast : null,
+            vNorth: readings.camVector ? readings.camVector.vNorth : null,
+            vUp: readings.camVector ? readings.camVector.vUp : null
+          },
+          gps: {
+            lat: obsLat,
+            lon: obsLon,
+            accuracy: readings.gps.accuracy,
+            groundAlt: sensorMgr.gps.groundAlt,
+            postureHeight: readings.postureHeight,
+            effectiveAlt: obsAlt
+          },
+          result: {
+            hasHit: result.hasHit,
+            slantRange: result.slantRange,
+            horizontalDistance: result.horizontalDistance,
+            deltaHeight: result.deltaHeight,
+            targetCoords: result.targetCoords,
+            message: result.message
+          }
+        });
+      }
     } catch (err) {
       console.error('Error al medir:', err);
       showToast('Error al conectar con API topográfica: ' + err.message);

@@ -295,9 +295,18 @@
         const smoothedPitch = this.pitchFilter.update(cam.pitch);
         this.currentFiltered.pitch = Math.round(smoothedPitch * 10) / 10;
 
-        // Roll (alabeo / inclinación lateral)
-        const smoothedRoll = this.rollFilter.update(gamma);
-        this.currentFiltered.roll = Math.round(smoothedRoll * 10) / 10;
+        this.currentCamVector = {
+          vEast: cam.vEast,
+          vNorth: cam.vNorth,
+          vUp: cam.vUp
+        };
+        this.currentRaw = {
+          alpha: alpha !== null ? Math.round(alpha * 10) / 10 : null,
+          beta: beta !== null ? Math.round(beta * 10) / 10 : null,
+          gamma: gamma !== null ? Math.round(gamma * 10) / 10 : null,
+          isAbsolute: !!event.absolute,
+          webkitCompassHeading: typeof event.webkitCompassHeading !== 'undefined' ? event.webkitCompassHeading : null
+        };
 
         if (this.onUpdateCallback) {
           this.onUpdateCallback(this.getReadings());
@@ -329,6 +338,8 @@
         rollDeg: this.currentFiltered.roll,
         declination: this.declination,
         postureHeight: this.postureHeight,
+        camVector: this.currentCamVector || { vEast: 0, vNorth: 0, vUp: 0 },
+        rawSensors: this.currentRaw || {},
         gps: { ...this.gps }
       };
     }
