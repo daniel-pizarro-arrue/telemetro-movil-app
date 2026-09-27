@@ -149,28 +149,40 @@ document.addEventListener('DOMContentLoaded', () => {
       gpsCoords.textContent = 'GPS no soportado';
     }
 
-    // 2. Sensores de Orientación
+    // 2. Sensores de Orientación sincronizados con vsync (requestAnimationFrame)
+    let hudFrameScheduled = false;
+    let latestHudReadings = null;
+
     sensorMgr.startOrientation((readings) => {
-      // Actualizar HUD
-      if (currentAngleUnit === 'deg') {
-        hudAzimuth.textContent = `${readings.azimuthTrue.toFixed(1).padStart(5, '0')}°`;
-        hudPitch.textContent = `${readings.pitchDeg > 0 ? '+' : ''}${readings.pitchDeg.toFixed(1)}°`;
-      } else {
-        // Notación militar en milésimas (6400)
-        const azMils = readings.azimuthMils;
-        const pitchMils = readings.pitchMils;
-        hudAzimuth.textContent = `${azMils} ₥`;
-        hudPitch.textContent = `${pitchMils > 0 ? '+' : ''}${pitchMils} ₥`;
-      }
-      hudRoll.textContent = `${readings.rollDeg > 0 ? '+' : ''}${readings.rollDeg.toFixed(1)}°`;
+      latestHudReadings = readings;
 
-      // Cinta de brújula superior deslizante (desplazamiento visual simulado)
-      const compassOffset = -(readings.azimuthTrue * 1.5) % 360;
-      compassTape.style.transform = `translateX(${compassOffset}px)`;
+      if (!hudFrameScheduled) {
+        hudFrameScheduled = true;
+        requestAnimationFrame(() => {
+          hudFrameScheduled = false;
+          if (!latestHudReadings) return;
+          const r = latestHudReadings;
 
-      // Horizonte artificial rotativo con el Roll
-      if (artificialHorizon) {
-        artificialHorizon.style.transform = `rotate(${-readings.rollDeg}deg)`;
+          // Actualizar métricas HUD
+          if (currentAngleUnit === 'deg') {
+            hudAzimuth.textContent = `${r.azimuthTrue.toFixed(1).padStart(5, '0')}°`;
+            hudPitch.textContent = `${r.pitchDeg > 0 ? '+' : ''}${r.pitchDeg.toFixed(1)}°`;
+          } else {
+            // Notación militar en milésimas (6400)
+            hudAzimuth.textContent = `${r.azimuthMils} ₥`;
+            hudPitch.textContent = `${r.pitchMils > 0 ? '+' : ''}${r.pitchMils} ₥`;
+          }
+          hudRoll.textContent = `${r.rollDeg > 0 ? '+' : ''}${r.rollDeg.toFixed(1)}°`;
+
+          // Cinta de brújula superior deslizante
+          const compassOffset = -(r.azimuthTrue * 1.5) % 360;
+          compassTape.style.transform = `translateX(${compassOffset}px)`;
+
+          // Horizonte artificial rotativo con el Roll de gravedad filtrado
+          if (artificialHorizon) {
+            artificialHorizon.style.transform = `rotate(${-r.rollDeg}deg)`;
+          }
+        });
       }
     }).catch(err => {
       console.warn('Sensores de orientación:', err.message);

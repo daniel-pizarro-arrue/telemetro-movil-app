@@ -177,6 +177,8 @@
       this.declination = 0;
       this.pitchOffset = 0;
       this.azimuthOffset = 0;
+      this.gravityRoll = null;
+      this.motionActive = false;
       this.watchId = null;
       this.orientationActive = false;
       this.onUpdateCallback = null;
@@ -271,6 +273,21 @@
         }
       }
 
+      // Escuchar acelerómetro de gravedad (devicemotion) para calcular el nivel del horizonte
+      // de forma directa y libre de singularidades de cardán (gimbal lock en vertical)
+      if (typeof window !== 'undefined' && 'ondevicemotion' in window && !this.motionActive) {
+        window.addEventListener('devicemotion', (motionEvent) => {
+          const acc = motionEvent.accelerationIncludingGravity;
+          if (!acc || acc.x === null || acc.y === null) return;
+          const norm = Math.hypot(acc.x, acc.y);
+          if (norm > 1.5) {
+            // roll en grados (-180° a +180°) usando la dirección de la gravedad física
+            this.gravityRoll = Math.atan2(acc.x, acc.y) * (180.0 / Math.PI);
+          }
+        }, true);
+        this.motionActive = true;
+      }
+
       const handler = (event) => {
         const alpha = event.alpha;
         const beta = event.beta;
@@ -304,8 +321,12 @@
         const smoothedPitch = this.pitchFilter.update(cam.pitch + this.pitchOffset);
         this.currentFiltered.pitch = Math.round(smoothedPitch * 10) / 10;
 
-        // Roll del visor de la cámara (-90° a +90°)
-        const smoothedRoll = this.rollFilter.update(cam.roll);
+        // Roll del visor de la cámara: preferir vector de gravedad del acelerómetro para evitar gimbal lock
+        let rawRoll = cam.roll;
+        if (this.gravityRoll !== null && !isNaN(this.gravityRoll)) {
+          rawRoll = this.gravityRoll;
+        }
+        const smoothedRoll = this.rollFilter.update(rawRoll);
         this.currentFiltered.roll = Math.round(smoothedRoll * 10) / 10;
 
         this.currentCamVector = {
