@@ -117,6 +117,21 @@ async function main() {
     }
 
     console.log('\n========================================================\n');
+
+    // Consultar historial
+    const history = await fetchJson(`${SESSIONS_PATH}/history`, token);
+    if (history) {
+      const entries = Object.entries(history);
+      console.log(`HISTORIAL DE CAPTURAS EN ESTA SESIÓN (${entries.length} registros):`);
+      entries.forEach(([key, item], index) => {
+        console.log(`\n--- CAPTURA #${index + 1} (${item.clientTimestamp}) ---`);
+        console.log(`  Raw: Alpha=${item.rawSensors?.alpha}°, Beta=${item.rawSensors?.beta}°, Gamma=${item.rawSensors?.gamma}°`);
+        console.log(`  Cam: Az=${item.camera3D?.azimuthTrue}°, Pitch=${item.camera3D?.pitch}°, Vector=(${item.camera3D?.vEast?.toFixed(3)}, ${item.camera3D?.vNorth?.toFixed(3)}, ${item.camera3D?.vUp?.toFixed(3)})`);
+        console.log(`  GPS: (${item.gps?.lat}, ${item.gps?.lon}), Precisión: ±${item.gps?.accuracy}m, Cota: ${item.gps?.groundAlt}m`);
+        console.log(`  Hit: ${item.result?.hasHit}, Slant: ${item.result?.slantRange}m, DeltaH: ${item.result?.deltaHeight}m`);
+      });
+      console.log('\n========================================================\n');
+    }
   } catch (err) {
     console.error('Error inspeccionando Firebase:', err.message);
   }

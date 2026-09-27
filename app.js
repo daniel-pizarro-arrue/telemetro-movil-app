@@ -202,6 +202,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // Calibración Rápida de Nivel (Cero / Tara de inclinación)
+  const btnTarePitch = document.getElementById('btn-tare-pitch');
+  const btnResetPitch = document.getElementById('btn-reset-pitch');
+
+  if (btnTarePitch) {
+    btnTarePitch.addEventListener('click', () => {
+      sensorMgr.calibrateHorizon();
+      showToast('Nivel calibrado a 0 ₥ (horizonte fijado)');
+    });
+  }
+
+  if (btnResetPitch) {
+    btnResetPitch.addEventListener('click', () => {
+      sensorMgr.resetCalibration();
+      showToast('Calibración restablecida');
+    });
+  }
+
   // Botón Disparador Láser / Medición Telemetría
   btnMeasure.addEventListener('click', async () => {
     playLaserSound();
@@ -260,7 +278,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         telemetrySheet.classList.add('open');
       } else {
-        showToast(result.message, 4000);
+        if (result.closestApproach && result.closestApproach.clearance < 60) {
+          showToast(`Sin impacto: Rayo pasó a +${result.closestApproach.clearance}m del relieve a los ${result.closestApproach.distance}m`, 4500);
+        } else {
+          showToast(result.message, 4000);
+        }
       }
 
       // Enviar diagnóstico completo a Firebase en segundo plano para análisis del agente

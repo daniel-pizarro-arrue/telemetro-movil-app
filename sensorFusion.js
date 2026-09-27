@@ -103,29 +103,35 @@
     const b = (betaDeg || 0) * degToRad;
     const g = (gammaDeg || 0) * degToRad;
 
-    // Componentes del vector de la cámara trasera en coordenadas terrestres (East, North, Up):
-    // La cámara trasera apunta en la dirección -Z del teléfono.
-    // Usando la matriz de rotación W3C R = Rz(alpha) * Rx(beta) * Ry(gamma):
-    const sinA = Math.sin(a), cosA = Math.cos(a);
-    const sinB = Math.sin(b), cosB = Math.cos(b);
-    const sinG = Math.sin(g), cosG = Math.cos(g);
+    // Matriz de rotación R de coordenadas de dispositivo a coordenadas terrestres (East, North, Up)
+    // según especificación estándar W3C DeviceOrientation:
+    // El eje óptico de la cámara trasera apunta en la dirección -Z del teléfono [0, 0, -1]
+    const cA = Math.cos(a), sA = Math.sin(a);
+    const cB = Math.cos(b), sB = Math.sin(b);
+    const cG = Math.cos(g), sG = Math.sin(g);
 
-    // Vector de la cámara:
-    const vEast = -(sinA * sinG + cosA * sinB * cosG);
-    const vNorth = -( -cosA * sinG + sinA * sinB * cosG );
-    const vUp = cosB * cosG; // Positivo hacia arriba (mirando a un cerro/cielo)
+    // Vector de la cámara trasera [0, 0, -1] en coordenadas terrestres:
+    // Columna 2 de la matriz de rotación R multiplicada por -1:
+    const vEast  = -(cA * sG + sA * sB * cG);
+    const vNorth = -(sA * sG - cA * sB * cG);
+    const vUp    = -(cB * cG);
 
     // Azimut verdadero desde el Norte (0° = N, 90° = E, 180° = S, 270° = W)
     let azimuth = Math.atan2(vEast, vNorth) * (180.0 / Math.PI);
     if (azimuth < 0) azimuth += 360.0;
 
     // Pitch: ángulo de elevación respecto al plano horizontal (-90° a +90°)
-    const horizDist = Math.sqrt(vEast * vEast + vNorth * vNorth);
+    // Positivo hacia arriba (mirando a un cerro/cielo), negativo hacia el suelo
+    const horizDist = Math.hypot(vEast, vNorth);
     const pitch = Math.atan2(vUp, horizDist) * (180.0 / Math.PI);
+
+    // Roll del dispositivo: rotación lateral
+    const roll = gammaDeg || 0;
 
     return {
       azimuth: azimuth,
       pitch: pitch,
+      roll: roll,
       vEast: vEast,
       vNorth: vNorth,
       vUp: vUp
@@ -169,6 +175,8 @@
       };
 
       this.declination = 0;
+      this.pitchOffset = 0;
+      this.azimuthOffset = 0;
       this.watchId = null;
       this.orientationActive = false;
       this.onUpdateCallback = null;
@@ -284,16 +292,21 @@
         const smoothedAz = this.headingFilter.update(measuredAzimuth);
         this.currentFiltered.azimuthMag = Math.round(smoothedAz * 10) / 10;
 
-        // Aplicar declinación magnética para asegurar Azimut Verdadero
-        let trueHeading = smoothedAz;
+        // Aplicar declinación magnética y offset de calibración para asegurar Azimut Verdadero
+        let trueHeading = smoothedAz + this.azimuthOffset;
         if (!event.absolute || typeof event.webkitCompassHeading !== 'undefined') {
-          trueHeading = (smoothedAz + this.declination + 360) % 360;
+          trueHeading += this.declination;
         }
+        trueHeading = (trueHeading % 360 + 360) % 360;
         this.currentFiltered.azimuthTrue = Math.round(trueHeading * 10) / 10;
 
         // Pitch del visor de la cámara (-90° a +90°, positivo hacia arriba al apuntar cerros)
-        const smoothedPitch = this.pitchFilter.update(cam.pitch);
+        const smoothedPitch = this.pitchFilter.update(cam.pitch + this.pitchOffset);
         this.currentFiltered.pitch = Math.round(smoothedPitch * 10) / 10;
+
+        // Roll del visor de la cámara (-90° a +90°)
+        const smoothedRoll = this.rollFilter.update(cam.roll);
+        this.currentFiltered.roll = Math.round(smoothedRoll * 10) / 10;
 
         this.currentCamVector = {
           vEast: cam.vEast,
@@ -322,6 +335,27 @@
       this.orientationActive = true;
     }
 
+    setPitchOffset(deg) {
+      this.pitchOffset = Number(deg) || 0;
+    }
+
+    setAzimuthOffset(deg) {
+      this.azimuthOffset = Number(deg) || 0;
+    }
+
+    calibrateHorizon() {
+      // Ajusta el pitch actual para que sea exactamente 0.0° (nivel horizontal)
+      if (this.currentCamVector) {
+        const rawPitch = Math.atan2(this.currentCamVector.vUp, Math.hypot(this.currentCamVector.vEast, this.currentCamVector.vNorth)) * (180.0 / Math.PI);
+        this.pitchOffset = -rawPitch;
+      }
+    }
+
+    resetCalibration() {
+      this.pitchOffset = 0;
+      this.azimuthOffset = 0;
+    }
+
     /**
      * Retorna una copia instantánea de todas las lecturas filtradas y calibradas
      */
@@ -337,6 +371,8 @@
         pitchMils: Math.round((pitch / 360.0) * 6400),
         rollDeg: this.currentFiltered.roll,
         declination: this.declination,
+        pitchOffset: this.pitchOffset,
+        azimuthOffset: this.azimuthOffset,
         postureHeight: this.postureHeight,
         camVector: this.currentCamVector || { vEast: 0, vNorth: 0, vUp: 0 },
         rawSensors: this.currentRaw || {},
@@ -356,6 +392,7 @@
     estimateMagneticDeclination,
     CircularEMA,
     LinearEMA,
+    calculateCameraOrientation,
     SensorManager
   };
 });
