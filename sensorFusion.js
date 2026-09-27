@@ -94,6 +94,45 @@
   }
 
   /**
+   * Calcula el vector 3D real de la cámara trasera y extrae el Azimut y Pitch
+   * independientemente de la inclinación del teléfono (evita el gimbal lock a 90°).
+   */
+  function calculateCameraOrientation(alphaDeg, betaDeg, gammaDeg) {
+    const degToRad = Math.PI / 180.0;
+    const a = (alphaDeg || 0) * degToRad;
+    const b = (betaDeg || 0) * degToRad;
+    const g = (gammaDeg || 0) * degToRad;
+
+    // Componentes del vector de la cámara trasera en coordenadas terrestres (East, North, Up):
+    // La cámara trasera apunta en la dirección -Z del teléfono.
+    // Usando la matriz de rotación W3C R = Rz(alpha) * Rx(beta) * Ry(gamma):
+    const sinA = Math.sin(a), cosA = Math.cos(a);
+    const sinB = Math.sin(b), cosB = Math.cos(b);
+    const sinG = Math.sin(g), cosG = Math.cos(g);
+
+    // Vector de la cámara:
+    const vEast = -(sinA * sinG + cosA * sinB * cosG);
+    const vNorth = -( -cosA * sinG + sinA * sinB * cosG );
+    const vUp = cosB * cosG; // Positivo hacia arriba (mirando a un cerro/cielo)
+
+    // Azimut verdadero desde el Norte (0° = N, 90° = E, 180° = S, 270° = W)
+    let azimuth = Math.atan2(vEast, vNorth) * (180.0 / Math.PI);
+    if (azimuth < 0) azimuth += 360.0;
+
+    // Pitch: ángulo de elevación respecto al plano horizontal (-90° a +90°)
+    const horizDist = Math.sqrt(vEast * vEast + vNorth * vNorth);
+    const pitch = Math.atan2(vUp, horizDist) * (180.0 / Math.PI);
+
+    return {
+      azimuth: azimuth,
+      pitch: pitch,
+      vEast: vEast,
+      vNorth: vNorth,
+      vUp: vUp
+    };
+  }
+
+  /**
    * Gestor de Sensores Móviles
    */
   class SensorManager {
@@ -225,54 +264,52 @@
       }
 
       const handler = (event) => {
-        let compassHeading = null;
+        const alpha = event.alpha;
+        const beta = event.beta;
+        const gamma = event.gamma;
 
-        // iOS proporciona webkitCompassHeading (rumbo magnético o verdadero si GPS activo)
-        if (typeof event.webkitCompassHeading !== 'undefined') {
-          compassHeading = event.webkitCompassHeading;
-        } else if (event.alpha !== null) {
-          // Android: alpha va en sentido antihorario [0, 360], convertir a azimut horario [0, 360]
-          compassHeading = (360 - event.alpha) % 360;
+        if (beta === null || gamma === null) return;
+
+        // Calcular orientación 3D exacta del eje óptico de la cámara
+        const cam = calculateCameraOrientation(alpha, beta, gamma);
+
+        let measuredAzimuth = cam.azimuth;
+
+        // En iOS, si webkitCompassHeading está disponible, proporciona rumbo magnético calibrado
+        if (typeof event.webkitCompassHeading !== 'undefined' && event.webkitCompassHeading !== null) {
+          measuredAzimuth = event.webkitCompassHeading;
         }
 
-        let pitch = 0;
-        let roll = 0;
+        // Suavizar azimut con filtro circular (evita saltos en 0°/360°)
+        const smoothedAz = this.headingFilter.update(measuredAzimuth);
+        this.currentFiltered.azimuthMag = Math.round(smoothedAz * 10) / 10;
 
-        // Determinación del pitch del visor de la cámara:
-        // Cuando el teléfono se sostiene verticalmente frente a los ojos:
-        // beta ≈ 90° al mirar al frente (horizonte = 0°).
-        // Si se inclina hacia arriba: beta > 90° o pitch positivo.
-        // Si se inclina hacia abajo: beta < 90° o pitch negativo.
-        if (event.beta !== null) {
-          // Normalizar para que mirando al frente horizonte = 0°
-          pitch = event.beta - 90;
+        // Aplicar declinación magnética para asegurar Azimut Verdadero
+        let trueHeading = smoothedAz;
+        if (!event.absolute || typeof event.webkitCompassHeading !== 'undefined') {
+          trueHeading = (smoothedAz + this.declination + 360) % 360;
         }
+        this.currentFiltered.azimuthTrue = Math.round(trueHeading * 10) / 10;
 
-        if (event.gamma !== null) {
-          roll = event.gamma;
-        }
+        // Pitch del visor de la cámara (-90° a +90°, positivo hacia arriba al apuntar cerros)
+        const smoothedPitch = this.pitchFilter.update(cam.pitch);
+        this.currentFiltered.pitch = Math.round(smoothedPitch * 10) / 10;
 
-        if (compassHeading !== null) {
-          this.currentRaw.azimuth = compassHeading;
-          const smoothedMag = this.headingFilter.update(compassHeading);
-          this.currentFiltered.azimuthMag = Math.round(smoothedMag * 10) / 10;
-          // Aplicar declinación magnética para obtener el Azimut Geográfico (Verdadero)
-          let trueHeading = (smoothedMag + this.declination + 360) % 360;
-          this.currentFiltered.azimuthTrue = Math.round(trueHeading * 10) / 10;
-        }
-
-        this.currentRaw.pitch = pitch;
-        this.currentRaw.roll = roll;
-
-        this.currentFiltered.pitch = Math.round(this.pitchFilter.update(pitch) * 10) / 10;
-        this.currentFiltered.roll = Math.round(this.rollFilter.update(roll) * 10) / 10;
+        // Roll (alabeo / inclinación lateral)
+        const smoothedRoll = this.rollFilter.update(gamma);
+        this.currentFiltered.roll = Math.round(smoothedRoll * 10) / 10;
 
         if (this.onUpdateCallback) {
           this.onUpdateCallback(this.getReadings());
         }
       };
 
-      window.addEventListener('deviceorientation', handler, true);
+      // Preferir deviceorientationabsolute en Android si está disponible para mayor precisión
+      if ('ondeviceorientationabsolute' in window) {
+        window.addEventListener('deviceorientationabsolute', handler, true);
+      } else {
+        window.addEventListener('deviceorientation', handler, true);
+      }
       this.orientationActive = true;
     }
 

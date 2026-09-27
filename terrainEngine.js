@@ -135,7 +135,8 @@
       azimuth,
       pitch,
       maxRange = 5000,
-      numSamples = 40
+      numSamples = 45,
+      postureHeight = 1.60
     } = params;
 
     const distances = generateSamplingDistances(maxRange, numSamples);
@@ -155,17 +156,43 @@
     // Consultar elevaciones reales del terreno en un único lote
     const terrainElevations = await fetchElevationsBatch(samplePoints);
 
-    // Mapear el perfil completo de terreno y rayo
-    const profile = samplePoints.map((p, idx) => ({
-      ...p,
-      terrainAlt: terrainElevations[idx],
-      delta: p.rayAlt - terrainElevations[idx]
-    }));
+    // Mapear el perfil completo de terreno y rayo, incluyendo el origen d = 0
+    const groundBase = obsAlt - postureHeight;
+    const profile = [
+      {
+        distance: 0,
+        lat: obsLat,
+        lon: obsLon,
+        rayAlt: obsAlt,
+        terrainAlt: groundBase,
+        delta: postureHeight // Positivo: la cámara está por encima del suelo local
+      }
+    ];
+
+    for (let i = 0; i < samplePoints.length; i++) {
+      profile.push({
+        ...samplePoints[i],
+        terrainAlt: terrainElevations[i],
+        delta: samplePoints[i].rayAlt - terrainElevations[i]
+      });
+    }
 
     // Buscar primer punto de colisión (donde el rayo pasa de estar por encima a por debajo del terreno)
     let hitIndex = -1;
-    for (let i = 0; i < profile.length; i++) {
-      if (profile[i].delta <= 0) {
+    for (let i = 1; i < profile.length; i++) {
+      const p = profile[i];
+      // FILTRO NEAR-FIELD:
+      // Si el rayo apunta hacia el horizonte o hacia arriba (pitch >= -1.0°),
+      // no puede colisionar con el suelo plano a los pies del observador (< 80m).
+      // Solo se acepta impacto a < 80m si el terreno es genuinamente más alto que los ojos del observador
+      // (ej. una pared o ladera vertical inmediata).
+      if (p.distance < 80 && pitch >= -1.0) {
+        if (p.terrainAlt <= obsAlt) {
+          continue; // Ignorar artefacto de discretización de cuadrícula DEM
+        }
+      }
+
+      if (p.delta <= 0) {
         hitIndex = i;
         break;
       }
@@ -177,41 +204,28 @@
         hasHit: false,
         message: pitch > 0 
           ? 'Rayo sin impacto en el relieve (apunta al cielo o sobrepasa el terreno)'
-          : 'Sin impacto dentro del alcance máximo configurado',
+          : 'Sin impacto dentro del alcance máximo configurado (5.0 km)',
         maxRangeAnalyzed: maxRange,
         profile: profile,
         closestApproach: findClosestApproach(profile)
       };
     }
 
-    // Interpolar con precisión el punto exacto de intersección
-    let exactDistance = 0;
-    let targetLat = 0;
-    let targetLon = 0;
-    let targetAlt = 0;
+    // Interpolar con precisión el punto exacto de intersección entre profile[hitIndex - 1] y profile[hitIndex]
+    const pPrev = profile[hitIndex - 1];
+    const pHit = profile[hitIndex];
 
-    if (hitIndex === 0) {
-      // Impacto inmediato (ej. apuntando directo al piso al lado del observador)
-      exactDistance = profile[0].distance;
-      targetLat = profile[0].lat;
-      targetLon = profile[0].lon;
-      targetAlt = profile[0].terrainAlt;
-    } else {
-      const pPrev = profile[hitIndex - 1];
-      const pHit = profile[hitIndex];
+    const delta1 = pPrev.delta;
+    const delta2 = pHit.delta;
+    // Interpolación lineal del cruce por cero
+    const denom = Math.abs(delta1) + Math.abs(delta2);
+    const t = denom > 0 ? Math.abs(delta1) / denom : 0.5;
 
-      // Interpolación lineal del cruce por cero de delta = rayAlt - terrainAlt
-      const delta1 = pPrev.delta;
-      const delta2 = pHit.delta;
-      const t = Math.abs(delta1) / (Math.abs(delta1) + Math.abs(delta2));
-
-      exactDistance = pPrev.distance + t * (pHit.distance - pPrev.distance);
-      
-      const exactDest = getDestinationPoint(obsLat, obsLon, exactDistance, azimuth);
-      targetLat = exactDest.lat;
-      targetLon = exactDest.lon;
-      targetAlt = pPrev.terrainAlt + t * (pHit.terrainAlt - pPrev.terrainAlt);
-    }
+    const exactDistance = pPrev.distance + t * (pHit.distance - pPrev.distance);
+    const exactDest = getDestinationPoint(obsLat, obsLon, exactDistance, azimuth);
+    const targetLat = exactDest.lat;
+    const targetLon = exactDest.lon;
+    const targetAlt = pPrev.terrainAlt + t * (pHit.terrainAlt - pPrev.terrainAlt);
 
     const horizontalDistance = exactDistance * Math.cos(toRad(pitch));
     const deltaHeight = targetAlt - obsAlt;

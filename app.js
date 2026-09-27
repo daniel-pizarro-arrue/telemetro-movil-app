@@ -233,7 +233,8 @@ document.addEventListener('DOMContentLoaded', () => {
         azimuth: readings.azimuthTrue,
         pitch: readings.pitchDeg,
         maxRange: 5000, // Rango máximo configurado en 5km (5000m)
-        numSamples: 45  // Alta resolución de muestreo
+        numSamples: 45, // Alta resolución de muestreo
+        postureHeight: readings.postureHeight
       });
 
       if (result.hasHit) {
