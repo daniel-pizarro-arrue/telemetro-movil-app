@@ -65,6 +65,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let currentAngleUnit = 'mils';
   let lastHitCoords = null;
+  let lastProfileData = null;
   let audioCtx = null;
 
   // Sintetizador de sonido táctico para disparo láser (sin archivos externos)
@@ -232,6 +233,21 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Modo Pantalla Completa Táctico
+  const btnFullscreen = document.getElementById('btn-fullscreen');
+  if (btnFullscreen) {
+    btnFullscreen.addEventListener('click', () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+    });
+    document.addEventListener('fullscreenchange', () => {
+      btnFullscreen.textContent = document.fullscreenElement ? '✕' : '⛶';
+    });
+  }
+
   // Botón Disparador Láser / Medición Telemetría
   btnMeasure.addEventListener('click', async () => {
     playLaserSound();
@@ -286,6 +302,7 @@ document.addEventListener('DOMContentLoaded', () => {
         resTargetAlt.textContent = `${result.targetCoords.alt} m MSL`;
 
         lastHitCoords = result.targetCoords;
+        lastProfileData = { profile: result.profile, obsAlt: obsAlt, hitDistance: result.slantRange };
         drawTerrainProfile(result.profile, obsAlt, result.slantRange);
 
         telemetrySheet.classList.add('open');
@@ -338,9 +355,28 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // Redibujar perfil en rotación o cambio de resolución
+  function redrawCurrentProfile() {
+    if (lastProfileData) {
+      drawTerrainProfile(lastProfileData.profile, lastProfileData.obsAlt, lastProfileData.hitDistance);
+    }
+  }
+
+  window.addEventListener('resize', redrawCurrentProfile);
+  window.addEventListener('orientationchange', () => {
+    setTimeout(redrawCurrentProfile, 200);
+  });
+
   // Dibujar Gráfico de Corte Transversal del Terreno
   function drawTerrainProfile(profile, obsAlt, hitDistance) {
     if (!profile || profile.length === 0) return;
+
+    // Adaptar dinámicamente la resolución del canvas a su contenedor
+    const container = terrainCanvas.parentElement;
+    if (container && container.clientWidth > 0 && container.clientHeight > 0) {
+      terrainCanvas.width = container.clientWidth;
+      terrainCanvas.height = container.clientHeight;
+    }
 
     const ctx = terrainCanvas.getContext('2d');
     const w = terrainCanvas.width;

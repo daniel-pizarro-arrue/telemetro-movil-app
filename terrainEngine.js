@@ -102,17 +102,35 @@
     const lons = points.map(p => p.lon.toFixed(5)).join(',');
     const url = `https://api.open-meteo.com/v1/elevation?latitude=${lats}&longitude=${lons}`;
 
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Error en API de elevación: ${response.status} ${response.statusText}`);
+    let lastError = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        const timeoutId = controller ? setTimeout(() => controller.abort(), 12000) : null;
+        const options = controller ? { signal: controller.signal } : {};
+        
+        const response = await fetch(url, options);
+        if (timeoutId) clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error(`Error en API de elevación: ${response.status} ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        if (!data.elevation) {
+          throw new Error('Respuesta inválida de la API de elevación');
+        }
+
+        return Array.isArray(data.elevation) ? data.elevation : [data.elevation];
+      } catch (err) {
+        lastError = err;
+        if (attempt < 3) {
+          await new Promise(r => setTimeout(r, 1000 * attempt));
+        }
+      }
     }
 
-    const data = await response.json();
-    if (!data.elevation) {
-      throw new Error('Respuesta inválida de la API de elevación');
-    }
-
-    return Array.isArray(data.elevation) ? data.elevation : [data.elevation];
+    throw lastError;
   }
 
   /**

@@ -274,15 +274,32 @@
       }
 
       // Escuchar acelerómetro de gravedad (devicemotion) para calcular el nivel del horizonte
-      // de forma directa y libre de singularidades de cardán (gimbal lock en vertical)
+      // de forma directa y libre de singularidades de cardán en modo vertical y horizontal
       if (typeof window !== 'undefined' && 'ondevicemotion' in window && !this.motionActive) {
         window.addEventListener('devicemotion', (motionEvent) => {
           const acc = motionEvent.accelerationIncludingGravity;
           if (!acc || acc.x === null || acc.y === null) return;
-          const norm = Math.hypot(acc.x, acc.y);
+
+          // Obtener rotación de pantalla activa (0° retrato, 90° o 270° apaisado)
+          let screenAngle = 0;
+          if (typeof window.screen !== 'undefined' && window.screen.orientation && typeof window.screen.orientation.angle === 'number') {
+            screenAngle = window.screen.orientation.angle;
+          } else if (typeof window.orientation === 'number') {
+            screenAngle = window.orientation;
+          }
+
+          const rad = (screenAngle * Math.PI) / 180.0;
+          const cos = Math.cos(rad);
+          const sin = Math.sin(rad);
+
+          // Proyectar el vector de aceleración sobre el sistema de coordenadas de la pantalla activa
+          const sx = cos * acc.x - sin * acc.y;
+          const sy = sin * acc.x + cos * acc.y;
+
+          const norm = Math.hypot(sx, sy);
           if (norm > 1.5) {
-            // roll en grados (-180° a +180°) usando la dirección de la gravedad física
-            this.gravityRoll = Math.atan2(acc.x, acc.y) * (180.0 / Math.PI);
+            // roll en grados (-180° a +180°) relativo a la orientación visual del usuario
+            this.gravityRoll = Math.atan2(sx, sy) * (180.0 / Math.PI);
           }
         }, true);
         this.motionActive = true;

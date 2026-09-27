@@ -744,3 +744,324 @@ footer:has(a[href*="netlify.com"]) {
 .font-mono {
   font-family: var(--font-mono);
 }
+
+/* Botón Pantalla Completa */
+.btn-fullscreen {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--hud-cyan);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 0.35rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.btn-fullscreen:active {
+  transform: scale(0.92);
+  background: var(--hud-cyan);
+  color: #05101a;
+}
+
+/* Contenedor Responsive Dual para la Hoja de Resultados */
+.sheet-body-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.sheet-col-profile,
+.sheet-col-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+/* ==========================================================
+   MODO HORIZONTAL TÁCTICO (LANDSCAPE VIEW - MILITARY SIGHT)
+   Aprovecha el ancho de pantalla de 16:9 / 20:9 en smartphones
+   ========================================================== */
+@media (orientation: landscape) and (max-height: 600px), (min-aspect-ratio: 4/3) and (max-height: 600px) {
+  .hud-overlay {
+    display: block;
+    padding: env(safe-area-inset-top, 0.25rem) env(safe-area-inset-right, 0.5rem) env(safe-area-inset-bottom, 0.25rem) env(safe-area-inset-left, 0.5rem);
+  }
+
+  /* Barra Superior: Ultracompacta horizontal en el centro superior */
+  .hud-topbar {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: auto;
+    max-width: 72vw;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 0.2rem 0.8rem;
+    border-radius: 0 0 0.8rem 0.8rem;
+    background: rgba(5, 7, 10, 0.9);
+    border: 1px solid var(--hud-border);
+    border-top: none;
+    backdrop-filter: blur(12px);
+  }
+
+  .compass-tape-container {
+    width: 180px;
+    height: 24px;
+    border-bottom: 1.5px solid var(--hud-cyan);
+  }
+
+  .compass-tape {
+    font-size: 0.7rem;
+    gap: 0.35rem;
+  }
+
+  .hud-quick-stats {
+    gap: 0.3rem;
+  }
+
+  .stat-pill {
+    padding: 0.15rem 0.3rem;
+    font-size: 0.62rem;
+  }
+
+  .stat-val {
+    font-size: 0.68rem;
+  }
+
+  /* Retícula Central Centrada en el visor panorámico */
+  .hud-reticle {
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(210px, 62vh);
+    height: min(210px, 62vh);
+  }
+
+  /* Flanco Izquierdo: Telemetría GPS Compacta en Columna */
+  .hud-gps-bar {
+    position: absolute;
+    left: max(0.4rem, env(safe-area-inset-left));
+    top: 36px;
+    width: 165px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.35rem 0.5rem;
+    background: rgba(8, 12, 20, 0.9);
+    border: 1px solid var(--hud-border);
+    border-radius: 0.6rem;
+    backdrop-filter: blur(12px);
+  }
+
+  .gps-cell .cell-label {
+    font-size: 0.52rem;
+  }
+
+  .gps-cell .cell-val {
+    font-size: 0.68rem;
+  }
+
+  /* Flanco Derecho: Selectores y Botón Disparador Láser Ergonómico */
+  .hud-controls {
+    position: absolute;
+    right: max(0.4rem, env(safe-area-inset-right));
+    top: 36px;
+    bottom: max(0.4rem, env(safe-area-inset-bottom));
+    width: 175px;
+    background: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 0.3rem;
+    pointer-events: none;
+  }
+
+  .hud-controls * {
+    pointer-events: auto;
+  }
+
+  .controls-row-top {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    overflow-x: visible;
+    padding-bottom: 0;
+    background: rgba(8, 12, 20, 0.9);
+    border: 1px solid var(--hud-border);
+    border-radius: 0.6rem;
+    padding: 0.35rem 0.45rem;
+    backdrop-filter: blur(12px);
+  }
+
+  .control-label {
+    font-size: 0.52rem;
+  }
+
+  .pill-selector {
+    border-radius: 0.35rem;
+  }
+
+  .pill-btn {
+    font-size: 0.58rem;
+    padding: 0.2rem 0.3rem;
+    flex: 1;
+    text-align: center;
+  }
+
+  /* Disparador Táctico accesible para el pulgar derecho */
+  .trigger-container {
+    width: 100%;
+    margin-top: auto;
+  }
+
+  .btn-laser-trigger {
+    height: 52px;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.75rem;
+    border-radius: 0.6rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.15rem;
+  }
+
+  .trigger-icon {
+    font-size: 1.05rem;
+  }
+
+  .trigger-text {
+    font-size: 0.65rem;
+    letter-spacing: 0.05em;
+  }
+
+  /* Hoja / Consola Widescreen de Resultados en Landscape */
+  .telemetry-sheet {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.95);
+    opacity: 0;
+    pointer-events: none;
+    width: min(880px, 95vw);
+    height: min(450px, 95dvh);
+    max-height: 95dvh;
+    border-radius: 0.85rem;
+    border: 1px solid var(--hud-cyan);
+    background: rgba(8, 12, 20, 0.97);
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.95), 0 0 25px rgba(0, 242, 254, 0.25);
+    padding: 0.5rem 0.85rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    overflow: hidden;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .telemetry-sheet.open {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .sheet-handle {
+    display: none;
+  }
+
+  .sheet-header {
+    padding-bottom: 0.2rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .sheet-title h3 {
+    font-size: 0.85rem;
+  }
+
+  .sheet-body-grid {
+    display: grid;
+    grid-template-columns: 1.25fr 1fr;
+    gap: 0.75rem;
+    flex: 1;
+    overflow-y: auto;
+    align-items: stretch;
+  }
+
+  .sheet-col-profile {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    gap: 0.4rem;
+  }
+
+  .profile-card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 0.45rem;
+  }
+
+  .canvas-wrapper {
+    flex: 1;
+    min-height: 130px;
+    max-height: 220px;
+  }
+
+  #terrain-canvas {
+    width: 100%;
+    height: 100%;
+  }
+
+  .sheet-col-metrics {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    overflow-y: auto;
+    padding-right: 2px;
+  }
+
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.3rem;
+  }
+
+  .metric-card {
+    padding: 0.4rem 0.5rem;
+  }
+
+  .metric-card.primary {
+    grid-column: span 2;
+  }
+
+  .metric-card.primary .metric-val {
+    font-size: 1.5rem;
+  }
+
+  .metric-val {
+    font-size: 1.05rem;
+  }
+
+  .metric-lbl {
+    font-size: 0.58rem;
+  }
+
+  .target-location-card {
+    padding: 0.35rem 0.5rem;
+    font-size: 0.65rem;
+    gap: 0.2rem;
+  }
+
+  .btn-full {
+    padding: 0.4rem 0.7rem;
+    font-size: 0.72rem;
+  }
+}
+

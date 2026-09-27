@@ -58,6 +58,7 @@
             <span class="stat-lbl">RNG:</span>
             <span class="stat-val font-mono" style="color: var(--hud-green);">5.0 KM</span>
           </div>
+          <button class="stat-pill btn-fullscreen" id="btn-fullscreen" title="Modo Pantalla Completa">⛶</button>
         </div>
       </header>
 
@@ -157,80 +158,87 @@
         <button class="btn-close-sheet" id="btn-close-sheet">✕</button>
       </div>
 
-      <!-- Métricas Principales -->
-      <div class="metrics-grid">
-        <div class="metric-card primary">
-          <span class="metric-lbl">DISTANCIA REAL (LÍNEA DE MIRA)</span>
-          <div class="metric-val-group">
-            <span class="metric-val font-mono" id="res-slant-range">0</span>
-            <span class="metric-unit">m</span>
+      <!-- Contenedor Dual Grid (Columna única en vertical / Dos columnas en horizontal) -->
+      <div class="sheet-body-grid">
+        <div class="sheet-col-profile">
+          <!-- Canvas de Perfil Topográfico Transversal -->
+          <div class="profile-card">
+            <div class="profile-header">
+              <span>CORTE TRANSVERSAL DEL TERRENO (RAYMARCHING)</span>
+              <span class="badge-copernicus">DEM Copernicus 30m</span>
+            </div>
+            <div class="canvas-wrapper">
+              <canvas id="terrain-canvas" width="600" height="240"></canvas>
+            </div>
+            <div class="profile-legend">
+              <span class="legend-item"><span class="color-dot observer"></span> Observador</span>
+              <span class="legend-item"><span class="color-dot ray"></span> Haz Láser</span>
+              <span class="legend-item"><span class="color-dot terrain"></span> Terreno Real</span>
+              <span class="legend-item"><span class="color-dot hit"></span> Impacto</span>
+            </div>
           </div>
         </div>
 
-        <div class="metric-card">
-          <span class="metric-lbl">DISTANCIA HORIZONTAL</span>
-          <div class="metric-val-group">
-            <span class="metric-val font-mono" id="res-horizontal-dist">0</span>
-            <span class="metric-unit">m</span>
+        <div class="sheet-col-metrics">
+          <!-- Métricas Principales -->
+          <div class="metrics-grid">
+            <div class="metric-card primary">
+              <span class="metric-lbl">DISTANCIA REAL (LÍNEA DE MIRA)</span>
+              <div class="metric-val-group">
+                <span class="metric-val font-mono" id="res-slant-range">0</span>
+                <span class="metric-unit">m</span>
+              </div>
+            </div>
+
+            <div class="metric-card">
+              <span class="metric-lbl">DISTANCIA HORIZONTAL</span>
+              <div class="metric-val-group">
+                <span class="metric-val font-mono" id="res-horizontal-dist">0</span>
+                <span class="metric-unit">m</span>
+              </div>
+            </div>
+
+            <div class="metric-card">
+              <span class="metric-lbl">DESNIVEL RELATIVO (Δh)</span>
+              <div class="metric-val-group">
+                <span class="metric-val font-mono" id="res-delta-alt">0</span>
+                <span class="metric-unit">m</span>
+              </div>
+            </div>
+
+            <div class="metric-card">
+              <span class="metric-lbl">ÁNGULO DE SITIO</span>
+              <div class="metric-val-group">
+                <span class="metric-val font-mono" id="res-pitch">0.0°</span>
+              </div>
+            </div>
+
+            <div class="metric-card">
+              <span class="metric-lbl">RUMBO VERDADERO</span>
+              <div class="metric-val-group">
+                <span class="metric-val font-mono" id="res-azimuth">000.0°</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Coordenadas del Objetivo Impactado -->
+          <div class="target-location-card">
+            <div class="target-row">
+              <span class="target-lbl">COORDENADAS BLANCO:</span>
+              <span class="target-val font-mono" id="res-target-coords">-- , --</span>
+            </div>
+            <div class="target-row">
+              <span class="target-lbl">COTA TERRENO BLANCO:</span>
+              <span class="target-val font-mono" id="res-target-alt">-- m MSL</span>
+            </div>
+          </div>
+
+          <div class="sheet-actions">
+            <button class="btn btn-secondary btn-full" id="btn-open-maps">
+              <span>🗺️</span> Ver Ubicación del Blanco en Google Maps
+            </button>
           </div>
         </div>
-
-        <div class="metric-card">
-          <span class="metric-lbl">DESNIVEL RELATIVO (Δh)</span>
-          <div class="metric-val-group">
-            <span class="metric-val font-mono" id="res-delta-alt">0</span>
-            <span class="metric-unit">m</span>
-          </div>
-        </div>
-
-        <div class="metric-card">
-          <span class="metric-lbl">ÁNGULO DE SITIO</span>
-          <div class="metric-val-group">
-            <span class="metric-val font-mono" id="res-pitch">0.0°</span>
-          </div>
-        </div>
-
-        <div class="metric-card">
-          <span class="metric-lbl">RUMBO VERDADERO</span>
-          <div class="metric-val-group">
-            <span class="metric-val font-mono" id="res-azimuth">000.0°</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Coordenadas del Objetivo Impactado -->
-      <div class="target-location-card">
-        <div class="target-row">
-          <span class="target-lbl">COORDENADAS BLANCO:</span>
-          <span class="target-val font-mono" id="res-target-coords">-- , --</span>
-        </div>
-        <div class="target-row">
-          <span class="target-lbl">COTA TERRENO BLANCO:</span>
-          <span class="target-val font-mono" id="res-target-alt">-- m MSL</span>
-        </div>
-      </div>
-
-      <!-- Canvas de Perfil Topográfico Transversal -->
-      <div class="profile-card">
-        <div class="profile-header">
-          <span>CORTE TRANSVERSAL DEL TERRENO (RAYMARCHING)</span>
-          <span class="badge-copernicus">DEM Copernicus 30m</span>
-        </div>
-        <div class="canvas-wrapper">
-          <canvas id="terrain-canvas" width="600" height="240"></canvas>
-        </div>
-        <div class="profile-legend">
-          <span class="legend-item"><span class="color-dot observer"></span> Observador</span>
-          <span class="legend-item"><span class="color-dot ray"></span> Haz Láser</span>
-          <span class="legend-item"><span class="color-dot terrain"></span> Terreno Real</span>
-          <span class="legend-item"><span class="color-dot hit"></span> Impacto</span>
-        </div>
-      </div>
-
-      <div class="sheet-actions">
-        <button class="btn btn-secondary btn-full" id="btn-open-maps">
-          <span>🗺️</span> Ver Ubicación del Blanco en Google Maps
-        </button>
       </div>
     </div>
 

@@ -65,6 +65,33 @@ async function runTests() {
   assert(res2.slantRange > 2500 && res2.slantRange < 3500, `Distancia esperada ~2.9km, obtenida: ${res2.slantRange}m`);
   console.log(`✔ Captura #2 Raymarching: Impacto a ${res2.slantRange}m (Δh: +${res2.deltaHeight}m) [Cerro 2.9km confirmado]`);
 
+  console.log('\n=== [3] VALIDACIÓN DE MODO HORIZONTAL (LANDSCAPE) ===');
+
+  // Test Landscape Primary (alpha=270, beta=0, gamma=90) mirando al Norte
+  const landNorth = SensorFusion.calculateCameraOrientation(270, 0, 90);
+  assert(Math.abs(landNorth.azimuth - 0) < 0.1 || Math.abs(landNorth.azimuth - 360) < 0.1, `Azimut Landscape Norte falló: ${landNorth.azimuth}°`);
+  assert(Math.abs(landNorth.pitch - 0) < 0.1, `Pitch Landscape Norte falló: ${landNorth.pitch}°`);
+  console.log('✔ Modo Horizontal (Landscape Primary) apuntando al Norte: OK (Az 0°, Pitch 0°)');
+
+  // Test Landscape Roll Projection:
+  // Función auxiliar de prueba que emula la proyección de devicemotion en sensorFusion
+  function projectGravityRoll(accX, accY, screenAngle) {
+    const rad = (screenAngle * Math.PI) / 180.0;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    const sx = cos * accX - sin * accY;
+    const sy = sin * accX + cos * accY;
+    return Math.atan2(sx, sy) * (180.0 / Math.PI);
+  }
+
+  const rollLandLevel = projectGravityRoll(9.8, 0, 90);
+  assert(Math.abs(rollLandLevel) < 0.01, `Nivel horizontal en Landscape falló: ${rollLandLevel}°`);
+  console.log('✔ Nivel de Horizonte Artificial en Landscape (0.0°): OK');
+
+  const rollLandTilt = projectGravityRoll(9.8 * Math.cos(10 * Math.PI / 180), -9.8 * Math.sin(10 * Math.PI / 180), 90);
+  assert(Math.abs(rollLandTilt - 10) < 0.01, `Inclinación lateral en Landscape falló: ${rollLandTilt}°`);
+  console.log('✔ Inclinación lateral en Landscape (+10.0°): OK');
+
   console.log('\n======================================================');
   console.log('   TODAS LAS PRUEBAS UNITARIAS PASARON EXITOSAMENTE   ');
   console.log('======================================================');
