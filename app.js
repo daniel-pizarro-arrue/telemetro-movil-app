@@ -4,6 +4,28 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Erradicar de inmediato cualquier badge, iframe o drawer inyectado por Netlify
+  const cleanNetlifyInjections = () => {
+    const selectors = [
+      'netlify-drawer',
+      '[class*="netlify"]',
+      '[id*="netlify"]',
+      'iframe[src*="netlify"]',
+      'iframe[id*="netlify"]',
+      '[data-netlify-deploy-id]',
+      '#netlify-badge',
+      '.netlify-badge'
+    ];
+    selectors.forEach(sel => {
+      document.querySelectorAll(sel).forEach(el => {
+        try { el.remove(); } catch (e) {}
+      });
+    });
+  };
+  cleanNetlifyInjections();
+  const netlifyObserver = new MutationObserver(cleanNetlifyInjections);
+  netlifyObserver.observe(document.documentElement, { childList: true, subtree: true });
+
   // Elementos del DOM
   const cameraStream = document.getElementById('camera-stream');
   const cameraPlaceholder = document.getElementById('camera-placeholder');
