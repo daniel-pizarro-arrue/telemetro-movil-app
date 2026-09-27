@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Telémetro Móvil</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <div class="logo-badge">
+        <span class="pulse-dot"></span>
+        <span>TELEMETRO</span>
+      </div>
+      <div class="status-chip" id="connection-status">ONLINE</div>
+    </header>
+
+    <main class="main-content">
+      <div class="card hero-card">
+        <div class="crosshair-preview">
+          <div class="crosshair-circle"></div>
+          <div class="crosshair-line horizontal"></div>
+          <div class="crosshair-line vertical"></div>
+          <div class="readout-primary">
+            <span class="val" id="angle-readout">0.0</span>
+            <span class="unit">°</span>
+          </div>
+        </div>
+        <p class="card-caption">Sensor de Inclinación / Orientación</p>
+      </div>
+
+      <div class="card data-grid">
+        <div class="data-item">
+          <span class="label">Dispositivo</span>
+          <span class="value" id="device-model">Móvil</span>
+        </div>
+        <div class="data-item">
+          <span class="label">Sensores</span>
+          <span class="value sensor-active" id="sensors-status">Detectando...</span>
+        </div>
+        <div class="data-item">
+          <span class="label">Cámara</span>
+          <span class="value" id="camera-status">Pendiente</span>
+        </div>
+        <div class="data-item">
+          <span class="label">Modo</span>
+          <span class="value">Telémetro</span>
+        </div>
+      </div>
+
+      <div class="actions-section">
+        <button class="btn btn-primary" id="btn-activate-sensors">
+          <span class="icon">📡</span> Activar Sensores / Nivel
+        </button>
+        <button class="btn btn-secondary" id="btn-test-camera">
+          <span class="icon">📷</span> Probar Cámara
+        </button>
+      </div>
+
+      <div class="video-container" id="camera-wrapper" style="display: none;">
+        <video id="camera-feed" autoplay playsinline muted></video>
+        <div class="reticle-overlay">
+          <div class="reticle-center"></div>
+        </div>
+      </div>
+    </main>
+
+    <footer class="app-footer">
+      <span>Telémetro Móvil v1.0.0</span>
+      <span class="deploy-tag">Netlify Live</span>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
