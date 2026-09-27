@@ -35,13 +35,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const terrainCanvas = document.getElementById('terrain-canvas');
   const toastMsg = document.getElementById('toast-msg');
 
-  // Inicializar Gestor de Sensores
+  // Inicializar Gestor de Sensores (Milésimas 6400 y 1.60m de pie por defecto)
   const sensorMgr = new SensorFusion.SensorManager({
     postureHeight: 1.60,
-    angleUnit: 'deg'
+    angleUnit: 'mils'
   });
 
-  let currentAngleUnit = 'deg';
+  let currentAngleUnit = 'mils';
   let lastHitCoords = null;
   let audioCtx = null;
 
@@ -134,8 +134,11 @@ document.addEventListener('DOMContentLoaded', () => {
         hudAzimuth.textContent = `${readings.azimuthTrue.toFixed(1).padStart(5, '0')}°`;
         hudPitch.textContent = `${readings.pitchDeg > 0 ? '+' : ''}${readings.pitchDeg.toFixed(1)}°`;
       } else {
-        hudAzimuth.textContent = `${readings.azimuthMils} ₥`;
-        hudPitch.textContent = `${readings.pitchMils > 0 ? '+' : ''}${readings.pitchMils} ₥`;
+        // Notación militar en milésimas (6400)
+        const azMils = readings.azimuthMils;
+        const pitchMils = readings.pitchMils;
+        hudAzimuth.textContent = `${azMils} ₥`;
+        hudPitch.textContent = `${pitchMils > 0 ? '+' : ''}${pitchMils} ₥`;
       }
       hudRoll.textContent = `${readings.rollDeg > 0 ? '+' : ''}${readings.rollDeg.toFixed(1)}°`;
 
@@ -207,8 +210,8 @@ document.addEventListener('DOMContentLoaded', () => {
         obsAlt: obsAlt,
         azimuth: readings.azimuthTrue,
         pitch: readings.pitchDeg,
-        maxRange: 4500,
-        numSamples: 35
+        maxRange: 5000, // Rango máximo configurado en 5km (5000m)
+        numSamples: 45  // Alta resolución de muestreo
       });
 
       if (result.hasHit) {
@@ -220,8 +223,10 @@ document.addEventListener('DOMContentLoaded', () => {
           resPitch.textContent = `${result.pitchDeg > 0 ? '+' : ''}${result.pitchDeg.toFixed(1)}° (${result.slopePercent}%)`;
           resAzimuth.textContent = `${result.azimuthDeg.toFixed(1)}° Verdadero`;
         } else {
-          resPitch.textContent = `${Math.round((result.pitchDeg / 360) * 6400)} ₥`;
-          resAzimuth.textContent = `${Math.round((result.azimuthDeg / 360) * 6400)} ₥`;
+          const pMils = Math.round((result.pitchDeg / 360) * 6400);
+          const aMils = Math.round((result.azimuthDeg / 360) * 6400);
+          resPitch.textContent = `${pMils > 0 ? '+' : ''}${pMils} ₥ (${result.slopePercent}%)`;
+          resAzimuth.textContent = `${aMils} ₥ Verdadero (${result.azimuthDeg.toFixed(1)}°)`;
         }
 
         resTargetCoords.textContent = `${result.targetCoords.lat.toFixed(5)}, ${result.targetCoords.lon.toFixed(5)}`;

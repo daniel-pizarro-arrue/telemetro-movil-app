@@ -23,35 +23,39 @@
 
     <!-- HUD Overlay: Brújula Superior, Retícula Central y Datos -->
     <div class="hud-overlay">
-      <!-- Barra Superior: Rumbo / Azimut en cinta militar -->
+      <!-- Barra Superior: Rumbo / Azimut en cinta militar (Milésimas Artilleras 6400) -->
       <header class="hud-topbar">
         <div class="compass-tape-container">
           <div class="compass-tape" id="compass-tape">
-            <span class="compass-cardinal">N</span> · · · 
-            <span class="compass-deg">030</span> · · · 
-            <span class="compass-cardinal">E</span> · · · 
-            <span class="compass-deg">120</span> · · · 
-            <span class="compass-cardinal">S</span> · · · 
-            <span class="compass-deg">210</span> · · · 
-            <span class="compass-cardinal">W</span> · · · 
-            <span class="compass-deg">330</span> · · · 
-            <span class="compass-cardinal">N</span>
+            <span class="compass-cardinal">N 00</span> · · 
+            <span class="compass-deg">08</span> · · 
+            <span class="compass-cardinal">E 16</span> · · 
+            <span class="compass-deg">24</span> · · 
+            <span class="compass-cardinal">S 32</span> · · 
+            <span class="compass-deg">40</span> · · 
+            <span class="compass-cardinal">W 48</span> · · 
+            <span class="compass-deg">56</span> · · 
+            <span class="compass-cardinal">N 64</span>
           </div>
           <div class="compass-marker">▼</div>
         </div>
 
         <div class="hud-quick-stats">
-          <div class="stat-pill" title="Azimut Geográfico Verdadero">
+          <div class="stat-pill" title="Azimut Geográfico Verdadero (Milésimas)">
             <span class="stat-lbl">AZ V:</span>
-            <span class="stat-val font-mono" id="hud-azimuth">000.0°</span>
+            <span class="stat-val font-mono" id="hud-azimuth">00-00 ₥</span>
           </div>
-          <div class="stat-pill" title="Inclinación / Elevación">
+          <div class="stat-pill" title="Inclinación / Elevación (Milésimas)">
             <span class="stat-lbl">INC:</span>
-            <span class="stat-val font-mono" id="hud-pitch">0.0°</span>
+            <span class="stat-val font-mono" id="hud-pitch">0 ₥</span>
           </div>
           <div class="stat-pill" title="Inclinación Lateral / Alabeo">
             <span class="stat-lbl">ROLL:</span>
             <span class="stat-val font-mono" id="hud-roll">0.0°</span>
+          </div>
+          <div class="stat-pill" title="Rango Máximo Láser">
+            <span class="stat-lbl">RNG:</span>
+            <span class="stat-val font-mono" style="color: var(--hud-green);">5.0 KM</span>
           </div>
         </div>
       </header>
@@ -71,13 +75,13 @@
           <div class="horizon-line"></div>
         </div>
 
-        <!-- Escala milimétrica de inclinación vertical -->
+        <!-- Escala milimétrica de inclinación vertical en milésimas -->
         <div class="pitch-ladder" id="pitch-ladder">
-          <span class="ladder-mark">+10°</span>
-          <span class="ladder-mark">+5°</span>
-          <span class="ladder-mark zero">0°</span>
-          <span class="ladder-mark">-5°</span>
-          <span class="ladder-mark">-10°</span>
+          <span class="ladder-mark">+100 ₥</span>
+          <span class="ladder-mark">+50 ₥</span>
+          <span class="ladder-mark zero">0 ₥</span>
+          <span class="ladder-mark">-50 ₥</span>
+          <span class="ladder-mark">-100 ₥</span>
         </div>
       </div>
 
@@ -92,15 +96,15 @@
           <span class="cell-val font-mono" id="gps-accuracy">--</span>
         </div>
         <div class="gps-cell">
-          <span class="cell-label">COTA TERRENO</span>
-          <span class="cell-val font-mono" id="gps-terrain-alt">DEM: --</span>
+          <span class="cell-label">COTA BASE + OJOS</span>
+          <span class="cell-val font-mono" id="gps-terrain-alt">DEM: -- (+1.6m)</span>
         </div>
       </div>
 
       <!-- Controles Inferiores y Botón Disparador Láser -->
       <footer class="hud-controls">
         <div class="controls-row-top">
-          <!-- Selector de Postura -->
+          <!-- Selector de Postura (Por defecto De pie 1.60m) -->
           <div class="selector-group">
             <label class="control-label">Postura</label>
             <div class="pill-selector" id="posture-selector">
@@ -110,12 +114,12 @@
             </div>
           </div>
 
-          <!-- Selector de Unidades -->
+          <!-- Selector de Unidades (Por defecto Milésimas 6400) -->
           <div class="selector-group">
             <label class="control-label">Unidad</label>
             <div class="pill-selector" id="unit-selector">
-              <button class="pill-btn active" data-unit="deg">Grados (°)</button>
-              <button class="pill-btn" data-unit="mils">Mils (₥)</button>
+              <button class="pill-btn active" data-unit="mils">Mils (6400 ₥)</button>
+              <button class="pill-btn" data-unit="deg">Grados (°)</button>
             </div>
           </div>
         </div>
