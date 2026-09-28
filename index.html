@@ -45,7 +45,14 @@
       <div class="header-actions">
         <!-- Botón de Postura (De pie 1.6m / Arrodillado 0.9m / Tendido 0.3m) -->
         <button id="postureBtn" class="hud-icon-btn hidden" title="Cambiar Postura: De pie (1.6m)">
-          <span id="postureIcon" class="posture-icon">🧍</span>
+          <span id="postureIcon" class="posture-icon">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="4" r="2" fill="currentColor"/>
+              <line x1="12" y1="6" x2="12" y2="13"/>
+              <line x1="9" y1="9" x2="15" y2="9"/>
+              <polyline points="9,20 12,13 15,20"/>
+            </svg>
+          </span>
         </button>
 
         <!-- Botón de Brújula (activada / desactivada) -->

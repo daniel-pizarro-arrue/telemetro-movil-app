@@ -42,6 +42,7 @@
 
       this.onTargetMeasured = null;
       this.onStatusChange = null;
+      this.onOrientationChanged = null; // (heading, pitch) => {}
     }
 
     async init() {
@@ -142,16 +143,61 @@
 
     _setupInteraction() {
       const Cesium = window.Cesium;
-      const handler = new Cesium.ScreenSpaceEventHandler(this.viewer.scene.canvas);
+      const canvas = this.viewer.scene.canvas;
 
-      handler.setInputAction((movement) => {
-        // En primera persona permite medir tocando cualquier punto
-        if (this.controlMode !== 'aerial') {
-          this.measureAtScreenPosition(movement.position);
+      // Variables de arrastre táctil para rotar la cámara in-place (horizontal y vertical)
+      let isDragging = false;
+      let startX = 0;
+      let startY = 0;
+      let startHeading = 0;
+      let startPitch = 0;
+      let movedDist = 0;
+
+      canvas.addEventListener('pointerdown', (e) => {
+        if (this.controlMode !== 'first_person_free') return;
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        startHeading = this.heading;
+        startPitch = this.pitch;
+        movedDist = 0;
+        try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+      });
+
+      canvas.addEventListener('pointermove', (e) => {
+        if (!isDragging || this.controlMode !== 'first_person_free') return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        movedDist += Math.abs(dx) + Math.abs(dy);
+
+        // Sensibilidad táctil: rotación horizontal (rumbo) y vertical (inclinación)
+        const sensitivity = 0.22;
+        this.heading = (startHeading + dx * sensitivity + 360) % 360;
+        this.pitch = Math.max(-88, Math.min(88, startPitch - dy * sensitivity));
+
+        this.updateCameraOrientation();
+
+        if (this.onOrientationChanged) {
+          this.onOrientationChanged(this.heading, this.pitch);
         }
-      }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+      });
 
-      this._eventHandler = handler;
+      const onPointerEnd = (e) => {
+        if (isDragging) {
+          isDragging = false;
+          try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+
+          // Si fue un toque sin arrastre significativo (< 8px), medir el objetivo
+          if (movedDist < 8 && this.controlMode !== 'aerial') {
+            const rect = canvas.getBoundingClientRect();
+            const pos = new Cesium.Cartesian2(e.clientX - rect.left, e.clientY - rect.top);
+            this.measureAtScreenPosition(pos);
+          }
+        }
+      };
+
+      canvas.addEventListener('pointerup', onPointerEnd);
+      canvas.addEventListener('pointercancel', onPointerEnd);
     }
 
     /**
@@ -293,21 +339,16 @@
       const controller = this.viewer?.scene?.screenSpaceCameraController;
       if (!controller) return;
 
-      if (mode === 'first_person_sensor') {
+      if (mode === 'first_person_sensor' || mode === 'first_person_free') {
+        // En primera persona desactivamos los controles GIS nativos de Cesium para bloquear la posición (CERO DESPLAZAMIENTO)
         controller.enableRotate = false;
         controller.enableTranslate = false;
         controller.enableZoom = false;
         controller.enableTilt = false;
         controller.enableLook = false;
         this.updateCameraOrientation();
-      } else if (mode === 'first_person_free') {
-        controller.enableRotate = true;
-        controller.enableTranslate = false;
-        controller.enableZoom = true;
-        controller.enableTilt = true;
-        controller.enableLook = true;
       } else {
-        // Aerial
+        // En modo aéreo (aerial) se permiten los controles completos para ajustar y centrar el pin
         controller.enableRotate = true;
         controller.enableTranslate = true;
         controller.enableZoom = true;

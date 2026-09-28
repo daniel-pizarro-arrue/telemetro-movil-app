@@ -74,11 +74,34 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // ─── POSTURAS DEL OBSERVADOR ──────────────────────────────────────────────
+  // ─── POSTURAS TÁCTICAS DEL OBSERVADOR (SVGs SOBRIOS) ───────────────────
+  const POSTURE_SVGS = {
+    standing: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="4" r="2" fill="currentColor"/>
+      <line x1="12" y1="6" x2="12" y2="13"/>
+      <line x1="9" y1="9" x2="15" y2="9"/>
+      <polyline points="9,20 12,13 15,20"/>
+    </svg>`,
+    kneeling: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="9" cy="5" r="2" fill="currentColor"/>
+      <path d="M9 7v6l4 1"/>
+      <path d="M7 10h4"/>
+      <path d="M13 14v6"/>
+      <line x1="8" y1="20" x2="14" y2="20"/>
+    </svg>`,
+    prone: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="5" cy="13" r="2" fill="currentColor"/>
+      <line x1="7" y1="14" x2="17" y2="14"/>
+      <polyline points="7,16 9,14 11,16"/>
+      <polyline points="15,14 19,17 21,16"/>
+      <line x1="2" y1="19" x2="22" y2="19" stroke-dasharray="2 2" opacity="0.6"/>
+    </svg>`
+  };
+
   const POSTURES = [
-    { name: 'De pie', height: 1.6, icon: '🧍' },
-    { name: 'Arrodillado', height: 0.9, icon: '🧎' },
-    { name: 'Tendido', height: 0.3, icon: '🛌' }
+    { name: 'De pie', height: 1.6, key: 'standing' },
+    { name: 'Arrodillado', height: 0.9, key: 'kneeling' },
+    { name: 'Tendido', height: 0.3, key: 'prone' }
   ];
   let currentPostureIndex = 0; // 0 = De pie (1.6m) por defecto
 
@@ -115,6 +138,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     cesiumMap.onTargetMeasured = (data) => {
       renderMeasurementResults(data);
       syncWithFirebase(data);
+    };
+
+    // Actualizar cinta de rumbo en rotación táctil in-place
+    cesiumMap.onOrientationChanged = (heading, pitch) => {
+      const GeoMath = window.GeoMath;
+      const mils = GeoMath ? GeoMath.degreesToMils(heading) : Math.round((heading * 6400) / 360);
+      compassHeadingMils.textContent = GeoMath ? GeoMath.formatMils(mils) : `${mils} ₥`;
+      compassCardinal.textContent = getCardinal(heading);
     };
 
     await cesiumMap.init();
@@ -207,7 +238,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     currentPostureIndex = (currentPostureIndex + 1) % POSTURES.length;
     const posture = POSTURES[currentPostureIndex];
 
-    postureIcon.textContent = posture.icon;
+    postureIcon.innerHTML = POSTURE_SVGS[posture.key];
     postureBtn.title = `Postura: ${posture.name} (${posture.height}m)`;
 
     cesiumMap.setPostureHeight(posture.height);
