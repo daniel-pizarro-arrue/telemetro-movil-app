@@ -24,37 +24,63 @@
   <!-- Contenedor del Visor 3D Fullscreen -->
   <div id="cesiumContainer"></div>
 
-  <!-- Capa HUD Táctica Limpia -->
+  <!-- Capa HUD Táctica -->
   <div id="hudOverlay">
     
-    <!-- Barra Superior Minimalista -->
+    <!-- Barra Superior -->
     <header class="hud-header">
-      <!-- Indicador pequeño de estado GPS (Rojo / Amarillo / Verde) -->
-      <div class="gps-indicator-wrap" title="Estado de señal GPS">
+      <!-- Indicador GPS de color (Rojo / Amarillo / Verde) -->
+      <div class="gps-indicator-wrap" title="Señal GPS">
         <div id="gpsDot" class="gps-dot yellow"></div>
       </div>
 
-      <!-- Cinta de Azimut en Milésimas (6400) -->
-      <div class="compass-ribbon">
+      <!-- Cinta de Azimut en Milésimas (visible en primera persona) -->
+      <div class="compass-ribbon hidden" id="compassRibbon">
         <span class="compass-cardinal" id="compassCardinal">N</span>
         <span class="compass-value" id="compassHeadingMils">0000 ₥</span>
       </div>
 
-      <!-- Botón de Modo con Icono de Brújula Activa / Inactiva -->
-      <button id="modeToggleBtn" class="mode-icon-btn active" title="Alternar Modo Brújula / Navegación Libre">
-        <svg id="compassIconSvg" class="compass-svg" viewBox="0 0 24 24" width="24" height="24">
-          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/>
-          <polygon points="12,3 15,12 12,9 9,12" class="needle-north"/>
-          <polygon points="12,21 15,12 12,15 9,12" class="needle-south"/>
-        </svg>
-      </button>
+      <!-- Grupo de Botones de la Cabecera -->
+      <div class="header-actions">
+        <!-- Botón de Postura (De pie 1.6m / Arrodillado 0.9m / Tendido 0.3m) -->
+        <button id="postureBtn" class="hud-icon-btn hidden" title="Cambiar Postura: De pie (1.6m)">
+          <span id="postureIcon" class="posture-icon">🧍</span>
+        </button>
+
+        <!-- Botón de Brújula (activada / desactivada) -->
+        <button id="modeToggleBtn" class="hud-icon-btn hidden" title="Activar/Desactivar Brújula">
+          <svg id="compassIconSvg" class="compass-svg" viewBox="0 0 24 24" width="22" height="22">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/>
+            <polygon points="12,3 15,12 12,9 9,12" class="needle-north"/>
+            <polygon points="12,21 15,12 12,15 9,12" class="needle-south"/>
+          </svg>
+        </button>
+      </div>
     </header>
 
     <!-- Toast de Notificación Rápida -->
-    <div id="statusToast">Iniciando mapa 3D...</div>
+    <div id="statusToast">Buscando satélites GPS...</div>
 
-    <!-- Retícula Central Limpia (Sin indicadores numéricos) -->
-    <div class="reticle-container">
+    <!-- PIN CENTRAL PARA AJUSTE DE UBICACIÓN (Fase Aérea) -->
+    <div id="centerLocationPin" class="center-location-pin">
+      <div class="pin-head"></div>
+      <div class="pin-point"></div>
+      <div class="pin-ring-pulse"></div>
+    </div>
+
+    <!-- TARJETA DE CONFIRMACIÓN DE UBICACIÓN (Fase Aérea) -->
+    <div id="locationConfirmCard" class="location-confirm-card">
+      <div class="confirm-info">
+        <p class="confirm-title">📍 AJUSTA TU POSICIÓN</p>
+        <p class="confirm-desc">Mueve el mapa hasta centrar el pin en tu ubicación real</p>
+      </div>
+      <button id="btnConfirmLocation" class="btn-confirm-pos">
+        CONFIRMAR MI POSICIÓN
+      </button>
+    </div>
+
+    <!-- Retícula Central (Fase Primera Persona) -->
+    <div class="reticle-container hidden" id="reticleContainer">
       <div class="reticle-ring"></div>
       <div class="reticle-inner-dot"></div>
       <div class="reticle-line horizontal-left"></div>
@@ -63,8 +89,8 @@
       <div class="reticle-line vertical-bottom"></div>
     </div>
 
-    <!-- Panel de Telemetría Inferior (Ubicado abajo para despejar la vista) -->
-    <div class="telemetry-card" id="telemetryCard">
+    <!-- Panel de Telemetría Inferior (Mantenido oculto por el momento según instrucción) -->
+    <div class="telemetry-card hidden" id="telemetryCard">
       <div class="telemetry-grid">
         <div class="telemetry-item">
           <span class="label">DISTANCIA</span>
@@ -80,17 +106,17 @@
         </div>
         <div class="telemetry-item utm-item">
           <span class="label">UTM OBJETIVO</span>
-          <span class="val-mono" id="resUtm">Toca o mide al centro</span>
+          <span class="val-mono" id="resUtm">---</span>
         </div>
       </div>
     </div>
 
-    <!-- Barra de Acciones Inferior Simplificada -->
-    <footer class="hud-bottom-actions">
+    <!-- Barra de Acciones Inferior (Fase Primera Persona) -->
+    <footer class="hud-bottom-actions hidden" id="bottomActions">
       <button id="btnMeasure" class="btn-tactical primary" title="Medir al centro de la retícula">
         🎯 MEDIR
       </button>
-      <button id="btnClear" class="btn-tactical secondary" title="Limpiar objetivo medido">
+      <button id="btnClear" class="btn-tactical secondary" title="Limpiar objetivo">
         ✕
       </button>
     </footer>

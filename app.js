@@ -1,6 +1,5 @@
 /**
- * app.js - Orquestador limpio del Telémetro Móvil 3D
- * Conecta Cesium3DMap, SensorManager, GeoMath y TelemetryLogger.
+ * app.js - Flujo táctico de inicio aéreo, confirmación de posición, descenso y primera persona
  */
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -9,20 +8,32 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ─── ELEMENTOS DOM ────────────────────────────────────────────────────────
   const statusToast = document.getElementById('statusToast');
   const gpsDot = document.getElementById('gpsDot');
-  const modeToggleBtn = document.getElementById('modeToggleBtn');
+
+  const compassRibbon = document.getElementById('compassRibbon');
   const compassHeadingMils = document.getElementById('compassHeadingMils');
   const compassCardinal = document.getElementById('compassCardinal');
+
+  const centerLocationPin = document.getElementById('centerLocationPin');
+  const locationConfirmCard = document.getElementById('locationConfirmCard');
+  const btnConfirmLocation = document.getElementById('btnConfirmLocation');
+
+  const postureBtn = document.getElementById('postureBtn');
+  const postureIcon = document.getElementById('postureIcon');
+  const modeToggleBtn = document.getElementById('modeToggleBtn');
+
+  const reticleContainer = document.getElementById('reticleContainer');
+  const telemetryCard = document.getElementById('telemetryCard');
+  const bottomActions = document.getElementById('bottomActions');
+  const btnMeasure = document.getElementById('btnMeasure');
+  const btnClear = document.getElementById('btnClear');
 
   const resDirectDist = document.getElementById('resDirectDist');
   const resDeltaH = document.getElementById('resDeltaH');
   const resBearing = document.getElementById('resBearing');
   const resUtm = document.getElementById('resUtm');
 
-  const btnMeasure = document.getElementById('btnMeasure');
-  const btnClear = document.getElementById('btnClear');
-
   let toastTimer = null;
-  function showToast(message, duration = 2500) {
+  function showToast(message, duration = 3000) {
     if (!statusToast) return;
     statusToast.textContent = message;
     statusToast.classList.add('visible');
@@ -38,47 +49,42 @@ document.addEventListener('DOMContentLoaded', async () => {
     return cardinals[idx];
   }
 
-  // ─── 1. GESTOR DE SENSORES ───────────────────────────────────────────────
-  const sensorMgr = new window.SensorManager();
+  // ─── POSTURAS DEL OBSERVADOR ──────────────────────────────────────────────
+  const POSTURES = [
+    { name: 'De pie', height: 1.6, icon: '🧍' },
+    { name: 'Arrodillado', height: 0.9, icon: '🧎' },
+    { name: 'Tendido', height: 0.3, icon: '🛌' }
+  ];
+  let currentPostureIndex = 0; // 0 = De pie (1.6m) por defecto
 
-  sensorMgr.onGpsUpdate = (gps) => {
-    if (gpsDot) {
-      gpsDot.className = `gps-dot ${gps.status || 'yellow'}`;
+  // ─── RECUPERAR ÚLTIMA UBICACIÓN GUARDADA O DEFECTO ────────────────────────
+  let initialLocation = { lat: -33.4489, lng: -70.6693, alt: 600 };
+  try {
+    const saved = localStorage.getItem('telemetro_last_pos');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed.lat && parsed.lng) {
+        initialLocation.lat = parsed.lat;
+        initialLocation.lng = parsed.lng;
+      }
     }
+  } catch (e) {}
 
-    if (cesiumMap) {
-      cesiumMap.updateUserPosition(gps.lat, gps.lng, gps.alt);
-    }
-  };
-
-  sensorMgr.onOrientationUpdate = (ori) => {
-    const GeoMath = window.GeoMath;
-    const mils = GeoMath ? GeoMath.degreesToMils(ori.heading) : Math.round((ori.heading * 6400) / 360);
-
-    compassHeadingMils.textContent = GeoMath ? GeoMath.formatMils(mils) : `${mils} ₥`;
-    compassCardinal.textContent = getCardinal(ori.heading);
-
-    if (cesiumMap) {
-      cesiumMap.updateDeviceOrientation(ori.heading, ori.pitch, ori.roll);
-    }
-  };
-
-  sensorMgr.onError = (err) => {
-    showToast(err, 3500);
-  };
-
-  // ─── 2. MAPA 3D FOTORREALISTA ─────────────────────────────────────────────
+  // ─── 1. INICIALIZAR MOTOR 3D CESIUM (VISTA AÉREA INICIAL) ─────────────────
   let cesiumMap = null;
+  let hasGpsFlown = false;
+  let hasConfirmedLocation = false;
+  let isCompassActive = false; // Brújula por defecto "desactivada"
 
   try {
     cesiumMap = new window.Cesium3DMap('cesiumContainer', {
-      initialLat: -33.4489,
-      initialLng: -70.6693,
-      initialAlt: 600
+      initialLat: initialLocation.lat,
+      initialLng: initialLocation.lng,
+      initialAlt: initialLocation.alt
     });
 
     cesiumMap.onStatusChange = (msg) => {
-      showToast(msg, 3000);
+      showToast(msg, 2500);
     };
 
     cesiumMap.onTargetMeasured = (data) => {
@@ -92,27 +98,143 @@ document.addEventListener('DOMContentLoaded', async () => {
     showToast(`Error 3D: ${err.message}`, 5000);
   }
 
-  // Iniciar GPS
+  // ─── 2. GESTOR DE SENSORES Y GPS ──────────────────────────────────────────
+  const sensorMgr = new window.SensorManager();
+
+  sensorMgr.onGpsUpdate = (gps) => {
+    // Actualizar color del indicador (rojo, amarillo, verde)
+    if (gpsDot) {
+      gpsDot.className = `gps-dot ${gps.status || 'yellow'}`;
+    }
+
+    // Cuando el GPS logra precisión actual por primera vez y el usuario aún no confirma:
+    if (!hasConfirmedLocation && !hasGpsFlown && gps.status === 'connected') {
+      hasGpsFlown = true;
+      showToast('Ubicación GPS detectada. Volando a tu posición...', 2500);
+      if (cesiumMap) {
+        // Vuelo aéreo cenital sobre la posición del usuario
+        cesiumMap.setAerialView(gps.lat, gps.lng, 600, true);
+      }
+    }
+  };
+
+  sensorMgr.onOrientationUpdate = (ori) => {
+    const GeoMath = window.GeoMath;
+    const mils = GeoMath ? GeoMath.degreesToMils(ori.heading) : Math.round((ori.heading * 6400) / 360);
+
+    compassHeadingMils.textContent = GeoMath ? GeoMath.formatMils(mils) : `${mils} ₥`;
+    compassCardinal.textContent = getCardinal(ori.heading);
+
+    // Solo rota la cámara si la brújula está ACTIVADA por el usuario
+    if (cesiumMap && isCompassActive) {
+      cesiumMap.updateDeviceOrientation(ori.heading, ori.pitch, ori.roll);
+    }
+  };
+
+  sensorMgr.onError = (err) => {
+    showToast(err, 3500);
+  };
+
+  // Iniciar búsqueda de satélites GPS
   sensorMgr.startGps();
 
-  // ─── 3. TELEMETRÍA Y MEDICIÓN ────────────────────────────────────────────
+  // ─── 3. FASE: CONFIRMACIÓN DE UBICACIÓN (PIN CENTRAL) ─────────────────────
+  btnConfirmLocation.addEventListener('click', async () => {
+    if (!cesiumMap) return;
+
+    // Obtener las coordenadas exactas del centro de la pantalla bajo el pin
+    const centerCoords = cesiumMap.getCenterCoordinates();
+
+    // Guardar para el próximo inicio
+    try {
+      localStorage.setItem('telemetro_last_pos', JSON.stringify({
+        lat: centerCoords.lat,
+        lng: centerCoords.lng
+      }));
+    } catch (e) {}
+
+    hasConfirmedLocation = true;
+
+    // Ocultar pin central y tarjeta de confirmación
+    centerLocationPin.classList.add('hidden');
+    locationConfirmCard.classList.add('hidden');
+
+    // Descenso cinemático suave mirando al horizonte
+    const currentPosture = POSTURES[currentPostureIndex];
+    await cesiumMap.descendToGround(centerCoords.lat, centerCoords.lng, currentPosture.height);
+
+    // Activar elementos de primera persona
+    compassRibbon.classList.remove('hidden');
+    postureBtn.classList.remove('hidden');
+    modeToggleBtn.classList.remove('hidden');
+    reticleContainer.classList.remove('hidden');
+    bottomActions.classList.remove('hidden');
+
+    // Nota: El cuadro de información central se mantiene oculto por el momento según instrucción
+
+    showToast('Posición fijada. Ajusta postura o activa la brújula.', 3500);
+  });
+
+  // ─── 4. BOTÓN DE POSTURA (DE PIE / ARRODILLADO / TENDIDO) ─────────────────
+  postureBtn.addEventListener('click', () => {
+    if (!cesiumMap) return;
+
+    // Ciclar a la siguiente postura
+    currentPostureIndex = (currentPostureIndex + 1) % POSTURES.length;
+    const posture = POSTURES[currentPostureIndex];
+
+    postureIcon.textContent = posture.icon;
+    postureBtn.title = `Postura: ${posture.name} (${posture.height}m)`;
+
+    cesiumMap.setPostureHeight(posture.height);
+    showToast(`Postura: ${posture.name} (${posture.height}m)`, 2000);
+  });
+
+  // ─── 5. BOTÓN DE BRÚJULA (ACTIVADA / DESACTIVADA) ─────────────────────────
+  modeToggleBtn.addEventListener('click', async () => {
+    if (!cesiumMap) return;
+
+    isCompassActive = !isCompassActive;
+
+    if (isCompassActive) {
+      await sensorMgr.startOrientation();
+      modeToggleBtn.classList.add('active');
+      cesiumMap.setControlMode('first_person_sensor');
+      showToast('🧭 Brújula activada: El mapa sigue el teléfono.', 2500);
+    } else {
+      modeToggleBtn.classList.remove('active');
+      cesiumMap.setControlMode('first_person_free');
+      showToast('👆 Brújula desactivada: Arrastra libremente con los dedos.', 2500);
+    }
+  });
+
+  // ─── 6. DISPARO / MEDICIÓN AL CENTRO ──────────────────────────────────────
+  btnMeasure.addEventListener('click', () => {
+    if (!cesiumMap) return;
+    const res = cesiumMap.measureCenterReticle();
+    if (!res) {
+      showToast('Apunta hacia el terreno o edificio para medir');
+    }
+  });
+
+  btnClear.addEventListener('click', () => {
+    if (!cesiumMap) return;
+    cesiumMap.clearTarget();
+    showToast('Objetivo limpiado');
+  });
+
   function renderMeasurementResults(data) {
     const GeoMath = window.GeoMath;
-
     const directStr = GeoMath ? GeoMath.formatDistance(data.directDistance) : `${Math.round(data.directDistance)} m`;
     const deltaSign = data.deltaElevation >= 0 ? '+' : '';
     const deltaStr = `${deltaSign}${Math.round(data.deltaElevation)} m`;
-
     const mils = GeoMath ? GeoMath.degreesToMils(data.bearing) : Math.round((data.bearing * 6400) / 360);
     const bearingStr = GeoMath ? GeoMath.formatMils(mils) : `${mils} ₥`;
 
-    resDirectDist.textContent = directStr;
-    resDeltaH.textContent = deltaStr;
-    resBearing.textContent = bearingStr;
-
-    // Coordenadas UTM
-    const utmStr = data.target.utm || (GeoMath ? GeoMath.latLonToUTM(data.target.lat, data.target.lng).formatted : '---');
-    resUtm.textContent = utmStr;
+    if (resDirectDist) resDirectDist.textContent = directStr;
+    if (resDeltaH) resDeltaH.textContent = deltaStr;
+    if (resBearing) resBearing.textContent = bearingStr;
+    if (resUtm) resUtm.textContent = data.target.utm || '---';
 
     if (navigator.vibrate) {
       navigator.vibrate([40, 30, 60]);
@@ -132,6 +254,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       bearingMils: mils,
       bearingDegrees: data.bearing,
       targetUtm: data.target.utm,
+      posture: POSTURES[currentPostureIndex].name,
+      postureHeightMeters: POSTURES[currentPostureIndex].height,
       userGps: {
         lat: data.user.lat,
         lng: data.user.lng,
@@ -141,64 +265,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         lat: data.target.lat,
         lng: data.target.lng,
         alt: data.target.alt
-      },
-      viewMode: cesiumMap ? cesiumMap.viewMode : 'sensor'
+      }
     };
 
     window.TelemetryLogger.sendTelemetry(payload);
   }
-
-  // ─── 4. CONTROLES DE LA INTERFAZ ──────────────────────────────────────────
-
-  // Botón Medir al centro
-  btnMeasure.addEventListener('click', async () => {
-    // Activar sensores si aún no lo están
-    await sensorMgr.startOrientation();
-
-    if (!cesiumMap) return;
-    const res = cesiumMap.measureCenterReticle();
-    if (!res) {
-      showToast('Apunta hacia el terreno o edificio para medir');
-    }
-  });
-
-  // Botón Limpiar
-  btnClear.addEventListener('click', () => {
-    if (!cesiumMap) return;
-    cesiumMap.clearTarget();
-    resDirectDist.textContent = '---';
-    resDeltaH.textContent = '---';
-    resBearing.textContent = '---';
-    resUtm.textContent = 'Toca o mide al centro';
-    showToast('Objetivo limpiado');
-  });
-
-  // Botón de Modo (Icono Brújula vs Modo Libre)
-  let isSensorMode = true;
-  modeToggleBtn.addEventListener('click', async () => {
-    await sensorMgr.startOrientation();
-
-    if (!cesiumMap) return;
-    isSensorMode = !isSensorMode;
-
-    if (isSensorMode) {
-      modeToggleBtn.classList.add('active');
-      cesiumMap.setViewMode('sensor');
-      showToast('Brújula activada: Sigue tu orientación.');
-    } else {
-      modeToggleBtn.classList.remove('active');
-      cesiumMap.setViewMode('free');
-      showToast('Modo libre: Arrastra y haz zoom con los dedos.');
-    }
-  });
-
-  // Activar sensores al primer toque en cualquier parte de la pantalla
-  const activateSensorsOnGesture = async () => {
-    await sensorMgr.startOrientation();
-    window.removeEventListener('touchstart', activateSensorsOnGesture);
-    window.removeEventListener('click', activateSensorsOnGesture);
-  };
-  window.addEventListener('touchstart', activateSensorsOnGesture, { once: true });
-  window.addEventListener('click', activateSensorsOnGesture, { once: true });
 
 });
