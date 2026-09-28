@@ -714,8 +714,9 @@
     /**
      * Alterna la visibilidad de los edificios y estructuras 3D (Google Photorealistic 3D Tiles).
      * - Edificios ON : muestra Google 3D Tiles fotorrealistas, oculta el globo.
-     * - Edificios OFF: oculta Google 3D Tiles, activa el globo Cesium con terrain real
-     *   más una capa de imágenes satelitales ESRI de alta resolución (sin API key).
+     * - Edificios OFF: oculta Google 3D Tiles, activa el globo Cesium con terrain 3D real
+     *   (ESRI World Elevation) más imágenes satelitales de alta resolución.
+     *   La cámara se restaura exactamente en la posición y altura configuradas.
      */
     toggleBuildings(show) {
       this.showBuildings = (typeof show === 'boolean') ? show : !this.showBuildings;
@@ -736,20 +737,24 @@
           this._terrainImageryLayer = null;
         }
       } else {
-        // ── MODO TOPOGRAFÍA: globo Cesium + imágenes satelitales ESRI (sin edificios) ──
+        // ── MODO TOPOGRAFÍA 3D: globo Cesium con terreno real + imágenes satelitales ──
         if (scene.globe) {
           scene.globe.show = true;
-          scene.globe.depthTestAgainstTerrain = true;
+          scene.globe.depthTestAgainstTerrain = false; // false = la cámara NO se ve empujada por el terreno
+        }
+
+        // Mantener la detección de colisiones SIEMPRE desactivada para preservar la altura del usuario
+        if (scene.screenSpaceCameraController) {
+          scene.screenSpaceCameraController.enableCollisionDetection = false;
         }
 
         // Añadir la capa de imágenes satelitales ESRI si todavía no existe
         if (!this._terrainImageryLayer) {
           try {
-            // ESRI World Imagery: satélite de alta resolución, público y sin API key
             const imageryProvider = new Cesium.UrlTemplateImageryProvider({
               url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
               maximumLevel: 19,
-              credit: 'Tiles © Esri - Source: Esri, Maxar, GeoEye'
+              credit: 'Tiles © Esri — Maxar, GeoEye'
             });
             this._terrainImageryLayer = this.viewer.imageryLayers.addImageryProvider(imageryProvider);
           } catch (e) {
@@ -758,9 +763,15 @@
         }
       }
 
+      // Restaurar posición exacta de la cámara para que la altura del usuario no cambie
+      if (this.controlMode !== 'aerial' && this._cachedDestination) {
+        // Pequeño retardo para dejar que el globo se inicialice antes de fijar la cámara
+        setTimeout(() => this.updateCameraOrientation(), 80);
+      }
+
       this._notifyStatus(this.showBuildings
         ? '🏙️ Vista fotorrealista 3D activada'
-        : '🗺️ Modo topografía satelital (sin edificios)');
+        : '🗺️ Modo topografía 3D (sin edificios ni estructuras)');
 
       return this.showBuildings;
     }
@@ -984,28 +995,51 @@
     }
 
     /**
-     * Configura el proveedor de terreno de elevación de Cesium como capa de respaldo
-     * para cuando los edificios 3D están desactivados.
+     * Configura el proveedor de terreno de elevación 3D.
+     * Usa ESRI World Elevation (ArcGISTiledElevationTerrainProvider) como primera opción:
+     * es público, sin API key, y provee topografía 3D real (cerros, valles, montañas).
+     * Si falla, intenta Cesium World Terrain (requiere Ion token) y finalmente el elipsoide plano.
      */
     _setupTerrainProvider() {
       const Cesium = window.Cesium;
       if (!Cesium || !this.viewer) return;
-      try {
-        // CesiumTerrainProvider con el servicio de terreno de Cesium Ion (Asset 1)
+
+      const applyTerrain = (tp) => {
+        if (this.viewer && !this.viewer.isDestroyed()) {
+          this.viewer.terrainProvider = tp;
+        }
+      };
+
+      const tryArcGIS = () => {
+        // ESRI World Elevation 3D: terreno topográfico real sin autenticación
+        const ARCGIS_URL = 'https://elevation3d.arcgis.com/arcgis/rest/services/WorldElevation3D/Terrain3D/ImageServer';
+        if (Cesium.ArcGISTiledElevationTerrainProvider?.fromUrl) {
+          return Cesium.ArcGISTiledElevationTerrainProvider.fromUrl(ARCGIS_URL)
+            .then(applyTerrain)
+            .catch(tryCesiumWorldTerrain);
+        } else if (Cesium.ArcGISTiledElevationTerrainProvider) {
+          // API antigua (sin fromUrl estático)
+          try {
+            applyTerrain(new Cesium.ArcGISTiledElevationTerrainProvider({ url: ARCGIS_URL }));
+          } catch (_) { tryCesiumWorldTerrain(); }
+        } else {
+          tryCesiumWorldTerrain();
+        }
+      };
+
+      const tryCesiumWorldTerrain = () => {
         if (Cesium.createWorldTerrainAsync) {
           Cesium.createWorldTerrainAsync({ requestWaterMask: false, requestVertexNormals: false })
-            .then((tp) => {
-              if (this.viewer && !this.viewer.isDestroyed()) {
-                this.viewer.terrainProvider = tp;
-              }
-            })
-            .catch(() => {});
+            .then(applyTerrain)
+            .catch(() => {}); // Fallback final: EllipsoidTerrainProvider (plano)
         } else if (Cesium.CesiumTerrainProvider) {
-          this.viewer.terrainProvider = new Cesium.CesiumTerrainProvider({
-            url: Cesium.IonResource.fromAssetId(1)
-          });
+          try {
+            applyTerrain(new Cesium.CesiumTerrainProvider({ url: Cesium.IonResource.fromAssetId(1) }));
+          } catch (_) {}
         }
-      } catch (_) {}
+      };
+
+      try { tryArcGIS(); } catch (_) { try { tryCesiumWorldTerrain(); } catch (__) {} }
     }
 
     destroy() {
