@@ -19,8 +19,8 @@
   // Constantes Geodésicas
   const METERS_PER_DEG_LAT = 111139.0;
   const TILE_ZOOM = 12; // Zoom 12 para DEM de elevación (~30m por píxel)
-  const SAT_ZOOM = 15; // Zoom 15 para textura satelital: ~4.8m/px, fotorrealista HD
-  const SAT_GRID = 5;  // 5x5 tiles satelitales = 1280x1280 px (alta definición)
+  const SAT_ZOOM = 14; // Zoom 14 para textura satelital: ~9.5m/px, HD con cobertura completa
+  const SAT_GRID = 9;  // 9x9 tiles satelitales = 2304x2304 px cubriendo ~17 km (≈ terrain mesh)
   const TERRAIN_SIZE_METERS = 18000; // 18 km x 18 km alrededor del observador
   const MESH_SEGMENTS = 256; // 256x256 = 66,049 vértices. Relieve detallado con cadencia aceptable
 
@@ -393,6 +393,8 @@
             satelliteTexture.dispose();
           }
           satelliteTexture = new THREE.CanvasTexture(satCanvas);
+          // Forzar flipY=false: coordenadas UV manuales, no queremos inversión automática
+          satelliteTexture.flipY = false;
           // Mipmaps + Filtrado anisotrópico para textura nítida incluso en ángulos oblicuos
           satelliteTexture.generateMipmaps = true;
           satelliteTexture.minFilter = THREE.LinearMipmapLinearFilter;
@@ -441,8 +443,10 @@
         posAttr.setY(i, relY);
 
         // ── Mapeo UV geodésico a la textura satelital HD (SAT_ZOOM) ──
+        // U: Oeste→0, Este→1 (normal)
         const u = (geo.lon - nwSat.lon) / (seSat.lon - nwSat.lon);
-        const v = (geo.lat - seSat.lat) / (nwSat.lat - seSat.lat);
+        // V con flipY=false: canvas fila 0 (norte) = v=0, fila N (sur) = v=1
+        const v = (nwSat.lat - geo.lat) / (nwSat.lat - seSat.lat);
         uvAttr.setXY(i, Math.max(0.0, Math.min(1.0, u)), Math.max(0.0, Math.min(1.0, v)));
 
         // Color hipsométrico de respaldo para modo topográfico
