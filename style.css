@@ -1,15 +1,18 @@
+/* style.css - Estilos tácticos militares y futuristas para Telémetro Móvil 3D */
 :root {
-  --bg-hud: rgba(10, 14, 23, 0.85);
-  --hud-green: #00ff88;
-  --hud-cyan: #00f2fe;
-  --hud-amber: #ffb703;
-  --hud-red: #ff3366;
-  --hud-dim: rgba(0, 242, 254, 0.25);
-  --hud-border: rgba(0, 242, 254, 0.35);
-  --text-main: #f0f6fc;
-  --text-muted: #8b949e;
-  --font-main: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  --bg-primary: #030712;
+  --bg-surface: rgba(15, 23, 42, 0.82);
+  --bg-surface-active: rgba(30, 41, 59, 0.92);
+  --border-glow: rgba(0, 240, 255, 0.4);
+  --cyan-bright: #00f0ff;
+  --cyan-dim: #0284c7;
+  --emerald-accent: #10b981;
+  --amber-warning: #f59e0b;
+  --red-alert: #ef4444;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --font-mono: 'SF Mono', 'Roboto Mono', 'Cascadia Code', Consolas, monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
 
 * {
@@ -20,1332 +23,454 @@
   user-select: none;
 }
 
-body {
-  background-color: #000;
-  color: var(--text-main);
-  font-family: var(--font-main);
-  height: 100vh;
-  height: 100dvh;
-  min-height: -webkit-fill-available;
-  width: 100vw;
+html, body {
+  width: 100%;
+  height: 100%;
   overflow: hidden;
-  position: fixed;
-  inset: 0;
+  background-color: var(--bg-primary);
+  color: var(--text-main);
+  font-family: var(--font-mono);
+  font-size: 13px;
 }
 
-/* ==========================================================
-   SUPRESIÓN TOTAL DE BADGE / DRAWER / IFRAMES DE NETLIFY
-   ========================================================== */
-[class*="netlify"],
-[id*="netlify"],
-[data-netlify-badge],
-iframe[src*="netlify"],
-iframe[id*="netlify"],
-netlify-drawer,
-.netlify-badge,
-#netlify-badge,
-div:has(> iframe[src*="netlify"]),
-div:has(> a[href*="netlify.com"]),
-a[href*="netlify.com"],
-footer:has(a[href*="netlify.com"]) {
-  display: none !important;
-  visibility: hidden !important;
-  pointer-events: none !important;
-  opacity: 0 !important;
-  width: 0 !important;
-  height: 0 !important;
-  position: absolute !important;
-  top: -9999px !important;
-  left: -9999px !important;
-  z-index: -9999 !important;
-  transform: scale(0) !important;
-}
-
-.hud-app {
-  position: relative;
+/* Visor 3D Fullscreen */
+#cesiumContainer {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
-  height: 100dvh;
-  display: flex;
-  flex-direction: column;
-}
-
-/* ==========================================================
-   CÁMARA TRASERA FULLSCREEN
-   ========================================================== */
-.camera-viewport {
-  position: absolute;
-  inset: 0;
   z-index: 1;
-  background: #05070a;
+  background: radial-gradient(circle at center, #0b1528 0%, #020617 100%);
 }
 
-#camera-stream {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-/* Canvas Three.js WebGL para Visión Sintética 3D y Calibración AR */
-#svs-canvas {
+/* Capa de interfaz HUD táctica */
+#hudOverlay {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
-  z-index: 2;
+  z-index: 10;
   pointer-events: none;
-  display: block;
-  touch-action: none;
-}
-
-body.mode-svs #svs-canvas {
-  pointer-events: auto;
-}
-
-.camera-placeholder {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  background: radial-gradient(circle at center, #101726 0%, #05070a 100%);
-  color: var(--text-muted);
-}
-
-.placeholder-icon {
-  font-size: 3rem;
-  opacity: 0.6;
-}
-
-/* ==========================================================
-   HUD OVERLAY TÁCTICO
-   ========================================================== */
-.hud-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: max(0.4rem, env(safe-area-inset-top, 0.4rem)) 0.75rem max(2.2rem, calc(env(safe-area-inset-bottom, 0px) + 1.8rem)) 0.75rem;
-  pointer-events: none;
 }
 
-/* Solo los controles interactivos capturan toques; el área de visor pasa directo al canvas */
-.hud-overlay button,
-.hud-overlay input,
-.hud-overlay .pill-btn,
-.hud-overlay .stat-pill,
-.hud-overlay .mode-toggle-group,
-.hud-overlay .svs-toolbar,
-.hud-overlay .btn-laser-trigger,
-.hud-overlay .sheet-handle,
-.hud-overlay .sheet-header button {
+/* Header superior */
+.hud-header {
   pointer-events: auto;
-}
-
-.hud-reticle,
-.hud-reticle *,
-.artificial-horizon,
-.pitch-ladder,
-.compass-tape-container {
-  pointer-events: none !important;
-}
-
-/* Barra Superior: Brújula y Stats Rápidos */
-.hud-topbar {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.4rem;
-  background: linear-gradient(180deg, rgba(5, 7, 10, 0.9) 0%, rgba(5, 7, 10, 0.2) 80%, transparent 100%);
-  padding: 0.5rem 0.5rem 0.75rem 0.5rem;
-  border-radius: 0 0 1rem 1rem;
-}
-
-.compass-tape-container {
-  position: relative;
-  width: 280px;
-  height: 32px;
-  overflow: hidden;
-  border-bottom: 2px solid var(--hud-cyan);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.compass-tape {
+  padding: 12px 16px;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
-  color: var(--hud-cyan);
-  white-space: nowrap;
-  will-change: transform;
+  justify-content: space-between;
+  background: linear-gradient(180deg, rgba(2, 6, 23, 0.92) 0%, rgba(2, 6, 23, 0.4) 75%, transparent 100%);
+  backdrop-filter: blur(8px);
+}
+
+.title-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.radar-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: var(--cyan-bright);
+  box-shadow: 0 0 10px var(--cyan-bright);
+  animation: pulse-glow 2s infinite ease-in-out;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.4; transform: scale(0.9); }
+  50% { opacity: 1.0; transform: scale(1.15); box-shadow: 0 0 14px var(--cyan-bright); }
+}
+
+.title-text {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  color: var(--cyan-bright);
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
+}
+
+.header-status-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-chip {
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.status-chip.active {
+  border-color: var(--emerald-accent);
+  color: var(--emerald-accent);
+}
+
+/* Barra superior de brújula / azimut */
+.compass-ribbon {
+  position: absolute;
+  top: 54px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(10, 16, 26, 0.85);
+  border: 1px solid var(--border-glow);
+  border-radius: 20px;
+  padding: 4px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  backdrop-filter: blur(6px);
+  pointer-events: auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.compass-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--cyan-bright);
 }
 
 .compass-cardinal {
-  font-weight: 800;
-  color: #fff;
+  color: var(--text-muted);
+  font-weight: bold;
 }
 
-.compass-marker {
+/* Retícula central (Mira del Telémetro) */
+.reticle-container {
   position: absolute;
-  bottom: -2px;
+  top: 50%;
   left: 50%;
-  transform: translateX(-50%);
-  font-size: 0.65rem;
-  color: var(--hud-red);
-}
-
-.hud-quick-stats {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.stat-pill {
+  transform: translate(-50%, -50%);
+  width: 140px;
+  height: 140px;
+  pointer-events: none;
   display: flex;
   align-items: center;
-  gap: 0.3rem;
-  background: rgba(10, 15, 25, 0.75);
-  border: 1px solid var(--hud-border);
-  padding: 0.2rem 0.55rem;
-  border-radius: 9999px;
-  backdrop-filter: blur(8px);
+  justify-content: center;
 }
 
-.stat-lbl {
-  font-size: 0.65rem;
-  color: var(--text-muted);
-  font-weight: 700;
-}
-
-.stat-val {
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: var(--hud-cyan);
-}
-
-/* ==========================================================
-   CONMUTADOR DE MODOS: LÁSER vs 3D AR
-   ========================================================== */
-.mode-toggle-group {
-  display: flex;
-  gap: 0.25rem;
-  background: rgba(10, 15, 25, 0.85);
-  border: 1px solid var(--hud-border);
-  padding: 0.15rem;
-  border-radius: 9999px;
-  backdrop-filter: blur(8px);
-}
-
-.mode-pill-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  font-family: var(--font-main);
-  font-size: 0.7rem;
-  font-weight: 700;
-  padding: 0.25rem 0.65rem;
-  border-radius: 9999px;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  white-space: nowrap;
-}
-
-.mode-pill-btn.active {
-  background: var(--hud-cyan);
-  color: #05070a;
-  box-shadow: 0 0 10px rgba(0, 242, 254, 0.45);
-}
-
-/* ==========================================================
-   BARRA DE CALIBRACIÓN TÁCTICA 3D AR (SVS TOOLBAR)
-   ========================================================== */
-.svs-toolbar {
+.reticle-crosshair {
   position: absolute;
-  top: max(4.6rem, env(safe-area-inset-top, 4.6rem));
+  width: 100%;
+  height: 100%;
+}
+
+.reticle-ring {
+  position: absolute;
+  top: 50%;
   left: 50%;
+  transform: translate(-50%, -50%);
+  width: 70px;
+  height: 70px;
+  border: 1px dashed rgba(0, 240, 255, 0.45);
+  border-radius: 50%;
+}
+
+.reticle-inner-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 4px;
+  height: 4px;
+  background-color: var(--cyan-bright);
+  border-radius: 50%;
+  box-shadow: 0 0 6px var(--cyan-bright);
+}
+
+.reticle-line {
+  position: absolute;
+  background-color: rgba(0, 240, 255, 0.6);
+}
+
+.reticle-line.horizontal-left {
+  top: 50%;
+  left: 10px;
+  width: 30px;
+  height: 1.5px;
+  transform: translateY(-50%);
+}
+
+.reticle-line.horizontal-right {
+  top: 50%;
+  right: 10px;
+  width: 30px;
+  height: 1.5px;
+  transform: translateY(-50%);
+}
+
+.reticle-line.vertical-top {
+  left: 50%;
+  top: 10px;
+  width: 1.5px;
+  height: 30px;
   transform: translateX(-50%);
-  z-index: 10;
+}
+
+.reticle-line.vertical-bottom {
+  left: 50%;
+  bottom: 10px;
+  width: 1.5px;
+  height: 30px;
+  transform: translateX(-50%);
+}
+
+.reticle-pitch-badge {
+  position: absolute;
+  right: -55px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  color: var(--cyan-bright);
+  background: rgba(10, 16, 26, 0.7);
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid rgba(0, 240, 255, 0.3);
+}
+
+/* Panel de telemetría flotante (Resultados) */
+.telemetry-card {
+  pointer-events: auto;
+  margin: 0 16px 8px 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-glow);
+  border-radius: 12px;
+  padding: 14px 16px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  transition: all 0.3s ease;
+  max-width: 500px;
+  align-self: center;
+  width: calc(100% - 32px);
+}
+
+.telemetry-primary-grid {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr 1fr;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.telemetry-hero {
   display: flex;
   flex-direction: column;
+}
+
+.telemetry-hero .label {
+  font-size: 10px;
+  color: var(--cyan-bright);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+.telemetry-hero .val-big {
+  font-size: 26px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.5px;
+  text-shadow: 0 0 12px rgba(0, 240, 255, 0.4);
+}
+
+.telemetry-stat {
+  display: flex;
+  flex-direction: column;
+}
+
+.telemetry-stat .label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.telemetry-stat .val {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.telemetry-secondary-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.telemetry-secondary-row span strong {
+  color: var(--cyan-bright);
+}
+
+.telemetry-firebase-status {
+  font-size: 10px;
+  display: flex;
   align-items: center;
-  gap: 0.35rem;
-  width: min(94%, 480px);
+  gap: 6px;
+  color: var(--emerald-accent);
+}
+
+/* Barra inferior de acciones tácticas */
+.hud-bottom-actions {
   pointer-events: auto;
-  animation: fadeInSvs 0.25s ease-out;
+  padding: 12px 16px 20px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: linear-gradient(0deg, rgba(2, 6, 23, 0.95) 0%, rgba(2, 6, 23, 0.7) 60%, transparent 100%);
+  backdrop-filter: blur(8px);
 }
 
-@keyframes fadeInSvs {
-  from { opacity: 0; transform: translate(-50%, -8px); }
-  to { opacity: 1; transform: translate(-50%, 0); }
+.btn-tactical {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  color: var(--cyan-bright);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 12px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  transition: all 0.15s ease;
 }
 
-.svs-toolbar-row {
+.btn-tactical:active {
+  transform: scale(0.96);
+  background: rgba(0, 240, 255, 0.2);
+}
+
+.btn-tactical.primary {
+  background: linear-gradient(135deg, rgba(0, 240, 255, 0.25) 0%, rgba(2, 132, 199, 0.4) 100%);
+  border: 1px solid var(--cyan-bright);
+  color: #fff;
+  font-size: 14px;
+  padding: 14px 24px;
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.35);
+}
+
+.btn-tactical.active-toggle {
+  background: rgba(0, 240, 255, 0.3);
+  border-color: var(--cyan-bright);
+  color: #fff;
+  box-shadow: inset 0 0 10px rgba(0, 240, 255, 0.4);
+}
+
+/* Control deslizante de calibración */
+.calibration-bar {
+  pointer-events: auto;
+  margin: 0 16px 8px 16px;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 6px 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.4rem;
-  background: rgba(10, 15, 25, 0.90);
-  border: 1px solid var(--hud-border);
-  padding: 0.35rem 0.6rem;
-  border-radius: 12px;
-  backdrop-filter: blur(12px);
-  width: 100%;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.65);
+  gap: 12px;
+  align-self: center;
+  max-width: 420px;
+  width: calc(100% - 32px);
 }
 
-.svs-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  background: rgba(0, 242, 254, 0.12);
-  border: 1px solid var(--hud-cyan);
-  color: var(--hud-cyan);
-  font-family: var(--font-main);
-  font-size: 0.7rem;
-  font-weight: 700;
-  padding: 0.3rem 0.6rem;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s;
-  white-space: nowrap;
-}
-
-.svs-btn.frozen {
-  background: rgba(255, 183, 3, 0.22);
-  border-color: var(--hud-amber);
-  color: var(--hud-amber);
-  box-shadow: 0 0 12px rgba(255, 183, 3, 0.4);
-  animation: pulseFreeze 1.8s infinite;
-}
-
-@keyframes pulseFreeze {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.03); }
-  100% { transform: scale(1); }
-}
-
-.svs-slider-group {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  flex: 1;
-  min-width: 85px;
-}
-
-.svs-slider-lbl {
-  font-size: 0.65rem;
+.calibration-bar label {
+  font-size: 11px;
   color: var(--text-muted);
-  font-weight: 700;
   white-space: nowrap;
 }
 
-.svs-range {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 100%;
-  height: 4px;
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.2);
-  outline: none;
+.calibration-bar input[type="range"] {
+  flex: 1;
+  accent-color: var(--cyan-bright);
 }
 
-.svs-range::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--hud-cyan);
-  cursor: pointer;
-  box-shadow: 0 0 6px var(--hud-cyan);
-}
-
-.svs-slider-val {
-  font-size: 0.68rem;
-  color: var(--hud-cyan);
-  min-width: 26px;
+.calibration-val {
+  font-size: 12px;
+  font-weight: bold;
+  color: var(--cyan-bright);
+  min-width: 44px;
   text-align: right;
 }
 
-.svs-zoom-group {
-  display: flex;
-  align-items: center;
-  gap: 0.2rem;
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 6px;
-  padding: 0.1rem 0.25rem;
-}
-
-.svs-zoom-lbl {
-  font-size: 0.68rem;
-  color: #fff;
-  min-width: 28px;
-  text-align: center;
-}
-
-.svs-btn-icon-only {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: #fff;
-  font-size: 0.75rem;
-  font-weight: 700;
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-
-.svs-btn-icon-only:active {
-  background: rgba(255, 255, 255, 0.2);
-}
-
-.svs-status-banner {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  background: rgba(10, 15, 25, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  padding: 0.22rem 0.75rem;
-  border-radius: 9999px;
-  font-size: 0.66rem;
-  color: var(--text-muted);
-  backdrop-filter: blur(8px);
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.svs-status-banner.calibrating {
-  border-color: var(--hud-amber);
-  color: var(--hud-amber);
-}
-
-.svs-banner-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--hud-green);
-  flex-shrink: 0;
-}
-
-.svs-status-banner.calibrating .svs-banner-dot {
-  background: var(--hud-amber);
-  box-shadow: 0 0 6px var(--hud-amber);
-  animation: pulseFreeze 1.2s infinite;
-}
-
-/* Modificaciones visuales en Modo 3D AR */
-body.mode-svs .hud-reticle {
-  opacity: 0.45;
-  transition: opacity 0.3s;
-}
-
-body.mode-svs .reticle-dot.center-pip {
-  opacity: 0.8;
-  box-shadow: 0 0 8px var(--hud-cyan);
-}
-
-/* ==========================================================
-   RETÍCULA TÁCTICA CENTRAL
-   ========================================================== */
-.hud-reticle {
+/* Notificación de estado temporal */
+#statusToast {
   position: absolute;
-  top: 38%;
+  top: 92px;
   left: 50%;
-  transform: translate(-50%, -50%);
-  width: min(190px, 48vw);
-  height: min(190px, 48vw);
-  pointer-events: none;
-}
-
-.reticle-circle.outer {
-  position: absolute;
-  inset: 0;
-  border: 1px dashed var(--hud-dim);
-  border-radius: 50%;
-}
-
-.reticle-circle.inner {
-  position: absolute;
-  inset: 50px;
-  border: 1.5px solid rgba(0, 242, 254, 0.5);
-  border-radius: 50%;
-}
-
-.reticle-dot.center-pip {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--hud-red);
-  box-shadow: 0 0 10px var(--hud-red);
-}
-
-.reticle-axis {
-  position: absolute;
-  background: rgba(0, 242, 254, 0.6);
-}
-
-.reticle-axis.h-line {
-  top: 50%;
-  width: 45px;
-  height: 1.5px;
-  transform: translateY(-50%);
-}
-
-.reticle-axis.h-line.left { left: 0; }
-.reticle-axis.h-line.right { right: 0; }
-
-.reticle-axis.v-line {
-  left: 50%;
-  width: 1.5px;
-  height: 45px;
   transform: translateX(-50%);
-}
-
-.reticle-axis.v-line.top { top: 0; }
-.reticle-axis.v-line.bottom { bottom: 0; }
-
-/* Nivelador de Horizonte Artificial */
-.artificial-horizon {
-  position: absolute;
-  inset: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  will-change: transform;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid var(--cyan-bright);
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 11px;
+  color: var(--cyan-bright);
+  backdrop-filter: blur(8px);
   pointer-events: none;
-}
-
-.horizon-line {
-  width: 70px;
-  height: 1.5px;
-  background: var(--hud-green);
-  box-shadow: 0 0 8px var(--hud-green);
-  opacity: 0.8;
-}
-
-/* Escala vertical de pitch */
-.pitch-ladder {
-  position: absolute;
-  right: -30px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  font-family: var(--font-mono);
-  font-size: 0.65rem;
-  color: var(--hud-cyan);
-  opacity: 0.7;
-}
-
-.pitch-ladder .zero {
-  color: var(--hud-green);
-  font-weight: 700;
-}
-
-/* ==========================================================
-   BARRA GPS
-   ========================================================== */
-.hud-gps-bar {
-  display: grid;
-  grid-template-columns: 1.5fr 1fr 1.2fr;
-  gap: 0.4rem;
-  background: rgba(8, 12, 20, 0.85);
-  border: 1px solid var(--hud-border);
-  border-radius: 0.6rem;
-  padding: 0.4rem 0.6rem;
-  backdrop-filter: blur(10px);
-}
-
-.gps-cell {
-  display: flex;
-  flex-direction: column;
-}
-
-.cell-label {
-  font-size: 0.58rem;
-  color: var(--text-muted);
-  font-weight: 700;
-  text-transform: uppercase;
-}
-
-.cell-val {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #fff;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 20;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
 }
 
-/* ==========================================================
-   CONTROLES Y BOTÓN DISPARADOR LÁSER
-   ========================================================== */
-.hud-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-  background: linear-gradient(0deg, rgba(5, 7, 10, 0.96) 0%, rgba(5, 7, 10, 0.75) 75%, transparent 100%);
-  padding: 0.4rem 0.2rem;
-  margin-bottom: 0.5rem;
+#statusToast.visible {
+  opacity: 1;
 }
 
-.controls-row-top {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.4rem;
-  overflow-x: auto;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-  padding-bottom: 2px;
-}
-
-.controls-row-top::-webkit-scrollbar {
-  display: none;
-}
-
-.selector-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  flex-shrink: 0;
-}
-
-.control-label {
-  font-size: 0.62rem;
-  color: var(--text-muted);
-  font-weight: 700;
-  text-transform: uppercase;
-}
-
-.pill-selector {
-  display: flex;
-  background: rgba(18, 24, 38, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 0.5rem;
-  overflow: hidden;
-}
-
-.pill-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  font-size: 0.68rem;
-  font-weight: 600;
-  padding: 0.35rem 0.6rem;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.pill-btn.active {
-  background: var(--hud-cyan);
-  color: #05101a;
-  font-weight: 700;
-}
-
-.trigger-container {
-  width: 100%;
-  padding-bottom: 0.25rem;
-}
-
-.btn-laser-trigger {
-  position: relative;
-  width: 100%;
-  height: 52px;
-  background: linear-gradient(135deg, #ff0844 0%, #ff4e50 100%);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 0.85rem;
-  color: #fff;
-  font-family: var(--font-main);
-  font-size: 1rem;
-  font-weight: 800;
-  letter-spacing: 0.05em;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  cursor: pointer;
-  box-shadow: 0 4px 18px rgba(255, 8, 68, 0.5);
-  overflow: hidden;
-  transition: transform 0.1s ease, box-shadow 0.2s ease;
-}
-
-.btn-laser-trigger:active {
-  transform: scale(0.97);
-  box-shadow: 0 2px 10px rgba(255, 8, 68, 0.3);
-}
-
-.laser-beam-effect {
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 60%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
-  transform: skewX(-20deg);
-  animation: laserShine 2.5s infinite;
-}
-
-@keyframes laserShine {
-  0% { left: -100%; }
-  40% { left: 150%; }
-  100% { left: 150%; }
-}
-
-/* ==========================================================
-   HOJA DE RESULTADOS TELEMETRÍA (SLIDE-UP SHEET)
-   ========================================================== */
-.telemetry-sheet {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 10;
-  max-height: 85vh;
-  background: rgba(11, 16, 26, 0.95);
-  border-top: 1px solid var(--hud-cyan);
-  border-radius: 1.25rem 1.25rem 0 0;
-  padding: 0.75rem 1rem 1.25rem 1rem;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-  overflow-y: auto;
-  transform: translateY(105%);
-  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.8);
-}
-
-.telemetry-sheet.open {
-  transform: translateY(0);
-}
-
-.sheet-handle {
-  width: 44px;
-  height: 4px;
-  background: rgba(255, 255, 255, 0.25);
-  border-radius: 9999px;
-  margin: 0 auto 0.2rem auto;
-  cursor: pointer;
-}
-
-.sheet-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.sheet-title {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.sheet-title h3 {
-  font-size: 0.95rem;
-  font-weight: 800;
-  color: var(--hud-cyan);
-  letter-spacing: 0.05em;
-}
-
-.pulse-indicator {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--hud-green);
-  box-shadow: 0 0 10px var(--hud-green);
-}
-
-.btn-close-sheet {
-  background: rgba(255, 255, 255, 0.1);
-  border: none;
-  color: #fff;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* Grilla de Métricas */
-.metrics-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 0.5rem;
-}
-
-.metric-card {
-  background: rgba(18, 25, 40, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 0.75rem;
-  padding: 0.65rem 0.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.metric-card.primary {
-  grid-column: span 2;
-  background: linear-gradient(135deg, rgba(0, 242, 254, 0.12) 0%, rgba(16, 185, 129, 0.08) 100%);
-  border: 1px solid var(--hud-cyan);
-}
-
-.metric-lbl {
-  font-size: 0.65rem;
-  color: var(--text-muted);
-  font-weight: 700;
-  letter-spacing: 0.03em;
-}
-
-.metric-val-group {
-  display: flex;
-  align-items: baseline;
-  gap: 0.3rem;
-}
-
-.metric-val {
-  font-size: 1.4rem;
-  font-weight: 800;
-  color: #fff;
-}
-
-.metric-card.primary .metric-val {
-  font-size: 2.2rem;
-  color: var(--hud-cyan);
-  text-shadow: 0 0 15px rgba(0, 242, 254, 0.35);
-}
-
-.metric-unit {
-  font-size: 0.9rem;
-  color: var(--text-muted);
-  font-weight: 600;
-}
-
-/* Tarjeta de Coordenadas */
-.target-location-card {
-  background: rgba(18, 25, 40, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 0.75rem;
-  padding: 0.6rem 0.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  font-size: 0.75rem;
-}
-
-.target-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.target-lbl {
-  color: var(--text-muted);
-  font-weight: 600;
-}
-
-.target-val {
-  color: #fff;
-  font-weight: 700;
-}
-
-/* Gráfico de Perfil Topográfico */
-.profile-card {
-  background: rgba(12, 17, 28, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 0.75rem;
-  padding: 0.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.profile-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.68rem;
-  font-weight: 700;
-  color: var(--text-muted);
-}
-
-.badge-copernicus {
-  background: rgba(0, 242, 254, 0.15);
-  color: var(--hud-cyan);
-  border: 1px solid rgba(0, 242, 254, 0.3);
-  padding: 0.15rem 0.45rem;
-  border-radius: 0.4rem;
-  font-family: var(--font-mono);
-  font-size: 0.62rem;
-}
-
-.canvas-wrapper {
-  width: 100%;
-  height: 140px;
-  background: #080c14;
-  border-radius: 0.5rem;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-#terrain-canvas {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-.profile-legend {
-  display: flex;
-  justify-content: space-around;
-  font-size: 0.65rem;
-  color: var(--text-muted);
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-}
-
-.color-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-
-.color-dot.observer { background: #3b82f6; }
-.color-dot.ray { background: #ff3366; }
-.color-dot.terrain { background: #10b981; }
-.color-dot.hit { background: #ffb703; box-shadow: 0 0 6px #ffb703; }
-
-/* Botones Comunes */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1rem;
-  border-radius: 0.65rem;
-  font-size: 0.85rem;
-  font-weight: 700;
-  border: none;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.btn-secondary {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-}
-
-.btn-secondary:active {
-  background: rgba(255, 255, 255, 0.15);
-}
-
-.btn-full {
-  width: 100%;
-}
-
-.btn-sm {
-  padding: 0.5rem 0.9rem;
-  font-size: 0.78rem;
-}
-
-.btn-outline {
-  background: transparent;
-  border: 1px solid var(--hud-cyan);
-  color: var(--hud-cyan);
-}
-
-/* Toast */
-.toast-notification {
-  position: absolute;
-  top: 1.25rem;
-  left: 50%;
-  transform: translateX(-50%) translateY(-100px);
-  background: rgba(15, 23, 42, 0.95);
-  border: 1px solid var(--hud-cyan);
-  color: #fff;
-  font-size: 0.8rem;
-  font-weight: 600;
-  padding: 0.6rem 1.2rem;
-  border-radius: 9999px;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5);
-  z-index: 100;
-  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  pointer-events: none;
-}
-
-.toast-notification.show {
-  transform: translateX(-50%) translateY(0);
-}
-
-.font-mono {
-  font-family: var(--font-mono);
-}
-
-/* Botón Pantalla Completa */
-.btn-fullscreen {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: var(--hud-cyan);
-  cursor: pointer;
-  font-size: 0.85rem;
-  padding: 0.15rem 0.45rem;
-  border-radius: 0.35rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.15s ease;
-}
-
-.btn-fullscreen:active {
-  transform: scale(0.92);
-  background: var(--hud-cyan);
-  color: #05101a;
-}
-
-/* Contenedor Responsive Dual para la Hoja de Resultados */
-.sheet-body-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-}
-
-.sheet-col-profile,
-.sheet-col-metrics {
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-}
-
-/* ==========================================================
-   MODO HORIZONTAL TÁCTICO (LANDSCAPE VIEW - MILITARY SIGHT)
-   Aprovecha el ancho de pantalla de 16:9 / 20:9 en smartphones
-   ========================================================== */
-@media (orientation: landscape) and (max-height: 600px), (min-aspect-ratio: 4/3) and (max-height: 600px) {
-  .hud-overlay {
-    display: block;
-    padding: env(safe-area-inset-top, 0.25rem) env(safe-area-inset-right, 0.5rem) env(safe-area-inset-bottom, 0.25rem) env(safe-area-inset-left, 0.5rem);
+/* Adaptación para modo horizontal (Landscape en móviles) */
+@media (orientation: landscape) and (max-height: 500px) {
+  .hud-header {
+    padding: 6px 16px;
   }
-
-  /* Barra Superior: Ultracompacta horizontal en el centro superior */
-  .hud-topbar {
+  .compass-ribbon {
+    top: 40px;
+    padding: 2px 12px;
+  }
+  .telemetry-card {
     position: absolute;
-    top: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: auto;
-    max-width: 72vw;
-    flex-direction: row;
-    align-items: center;
-    justify-content: center;
-    gap: 0.75rem;
-    padding: 0.2rem 0.8rem;
-    border-radius: 0 0 0.8rem 0.8rem;
-    background: rgba(5, 7, 10, 0.9);
-    border: 1px solid var(--hud-border);
-    border-top: none;
-    backdrop-filter: blur(12px);
-  }
-
-  .compass-tape-container {
-    width: 180px;
-    height: 24px;
-    border-bottom: 1.5px solid var(--hud-cyan);
-  }
-
-  .compass-tape {
-    font-size: 0.7rem;
-    gap: 0.35rem;
-  }
-
-  .hud-quick-stats {
-    gap: 0.3rem;
-  }
-
-  .stat-pill {
-    padding: 0.15rem 0.3rem;
-    font-size: 0.62rem;
-  }
-
-  .stat-val {
-    font-size: 0.68rem;
-  }
-
-  /* Barra SVS AR en modo horizontal */
-  .svs-toolbar {
-    top: 34px;
-    width: min(65vw, 440px);
-    gap: 0.2rem;
-  }
-
-  .svs-toolbar-row {
-    padding: 0.2rem 0.45rem;
-    gap: 0.25rem;
-  }
-
-  .svs-btn {
-    font-size: 0.64rem;
-    padding: 0.2rem 0.45rem;
-  }
-
-  .svs-status-banner {
-    font-size: 0.6rem;
-    padding: 0.12rem 0.5rem;
-  }
-
-  /* Retícula Central Centrada en el visor panorámico */
-  .hud-reticle {
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: min(210px, 62vh);
-    height: min(210px, 62vh);
-  }
-
-  /* Flanco Izquierdo: Telemetría GPS Compacta en Columna */
-  .hud-gps-bar {
-    position: absolute;
-    left: max(0.4rem, env(safe-area-inset-left));
-    top: 36px;
-    width: 165px;
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    padding: 0.35rem 0.5rem;
-    background: rgba(8, 12, 20, 0.9);
-    border: 1px solid var(--hud-border);
-    border-radius: 0.6rem;
-    backdrop-filter: blur(12px);
-  }
-
-  .gps-cell .cell-label {
-    font-size: 0.52rem;
-  }
-
-  .gps-cell .cell-val {
-    font-size: 0.68rem;
-  }
-
-  /* Flanco Derecho: Selectores y Botón Disparador Láser Ergonómico */
-  .hud-controls {
-    position: absolute;
-    right: max(0.4rem, env(safe-area-inset-right));
-    top: 36px;
-    bottom: max(0.4rem, env(safe-area-inset-bottom));
-    width: 175px;
-    background: none;
-    padding: 0;
+    right: 16px;
+    bottom: 12px;
+    width: 290px;
     margin: 0;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    gap: 0.3rem;
-    pointer-events: none;
+    padding: 8px 12px;
   }
-
-  .hud-controls * {
-    pointer-events: auto;
+  .telemetry-primary-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 6px;
+    padding-bottom: 6px;
   }
-
-  .controls-row-top {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    overflow-x: visible;
-    padding-bottom: 0;
-    background: rgba(8, 12, 20, 0.9);
-    border: 1px solid var(--hud-border);
-    border-radius: 0.6rem;
-    padding: 0.35rem 0.45rem;
-    backdrop-filter: blur(12px);
+  .telemetry-hero .val-big {
+    font-size: 20px;
   }
-
-  .control-label {
-    font-size: 0.52rem;
-  }
-
-  .pill-selector {
-    border-radius: 0.35rem;
-  }
-
-  .pill-btn {
-    font-size: 0.58rem;
-    padding: 0.2rem 0.3rem;
-    flex: 1;
-    text-align: center;
-  }
-
-  /* Disparador Táctico accesible para el pulgar derecho */
-  .trigger-container {
-    width: 100%;
-    margin-top: auto;
-  }
-
-  .btn-laser-trigger {
-    height: 52px;
-    padding: 0.35rem 0.5rem;
-    font-size: 0.75rem;
-    border-radius: 0.6rem;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0.15rem;
-  }
-
-  .trigger-icon {
-    font-size: 1.05rem;
-  }
-
-  .trigger-text {
-    font-size: 0.65rem;
-    letter-spacing: 0.05em;
-  }
-
-  /* Hoja / Consola Widescreen de Resultados en Landscape */
-  .telemetry-sheet {
+  .hud-bottom-actions {
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) scale(0.95);
-    opacity: 0;
-    pointer-events: none;
-    width: min(880px, 95vw);
-    height: min(450px, 95dvh);
-    max-height: 95dvh;
-    border-radius: 0.85rem;
-    border: 1px solid var(--hud-cyan);
-    background: rgba(8, 12, 20, 0.97);
-    box-shadow: 0 0 50px rgba(0, 0, 0, 0.95), 0 0 25px rgba(0, 242, 254, 0.25);
-    padding: 0.5rem 0.85rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-    overflow: hidden;
-    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    left: 16px;
+    bottom: 12px;
+    background: transparent;
+    padding: 0;
   }
-
-  .telemetry-sheet.open {
-    transform: translate(-50%, -50%) scale(1);
-    opacity: 1;
-    pointer-events: auto;
-  }
-
-  .sheet-handle {
-    display: none;
-  }
-
-  .sheet-header {
-    padding-bottom: 0.2rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  }
-
-  .sheet-title h3 {
-    font-size: 0.85rem;
-  }
-
-  .sheet-body-grid {
-    display: grid;
-    grid-template-columns: 1.25fr 1fr;
-    gap: 0.75rem;
-    flex: 1;
-    overflow-y: auto;
-    align-items: stretch;
-  }
-
-  .sheet-col-profile {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    gap: 0.4rem;
-  }
-
-  .profile-card {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    padding: 0.45rem;
-  }
-
-  .canvas-wrapper {
-    flex: 1;
-    min-height: 130px;
-    max-height: 220px;
-  }
-
-  #terrain-canvas {
-    width: 100%;
-    height: 100%;
-  }
-
-  .sheet-col-metrics {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-    overflow-y: auto;
-    padding-right: 2px;
-  }
-
-  .metrics-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.3rem;
-  }
-
-  .metric-card {
-    padding: 0.4rem 0.5rem;
-  }
-
-  .metric-card.primary {
-    grid-column: span 2;
-  }
-
-  .metric-card.primary .metric-val {
-    font-size: 1.5rem;
-  }
-
-  .metric-val {
-    font-size: 1.05rem;
-  }
-
-  .metric-lbl {
-    font-size: 0.58rem;
-  }
-
-  .target-location-card {
-    padding: 0.35rem 0.5rem;
-    font-size: 0.65rem;
-    gap: 0.2rem;
-  }
-
-  .btn-full {
-    padding: 0.4rem 0.7rem;
-    font-size: 0.72rem;
+  .calibration-bar {
+    position: absolute;
+    left: 16px;
+    bottom: 74px;
+    width: 240px;
+    margin: 0;
   }
 }
-

@@ -1,131 +1,50 @@
 /**
- * test_suite.js - Suite de pruebas unitarias automatizadas para el Telémetro Móvil 3D.
- * Valida la matriz W3C, azimuts cardinales, pitch y raymarching geodésico con datos reales.
+ * test_suite.js - Pruebas automáticas basadas en ejecución de código
  */
 
 const assert = require('assert');
-const SensorFusion = require('./sensorFusion.js');
-const TerrainEngine = require('./terrainEngine.js');
+const GeoMath = require('./geoMath.js');
 
-async function runTests() {
-  console.log('=== [1] VALIDACIÓN DE MATRIZ DE ORIENTACIÓN 3D (W3C SPEC) ===');
+console.log('--- INICIANDO TEST SUITE GEOMATH ---');
 
-  // Test 1: Teléfono en vertical retrato (beta=90, gamma=0) apuntando al Norte geográfico
-  const north = SensorFusion.calculateCameraOrientation(0, 90, 0);
-  assert(Math.abs(north.azimuth - 0) < 0.1, `Azimut Norte falló: esperado ~0°, obtenido ${north.azimuth}°`);
-  assert(Math.abs(north.pitch - 0) < 0.1, `Pitch Norte falló: esperado ~0°, obtenido ${north.pitch}°`);
-  console.log('✔ Retrato Vertical Norte: OK (Az 0°, Pitch 0°)');
+// Test 1: Distancia Haversine conocida
+// Santiago (-33.4489, -70.6693) a Cerro San Cristóbal (-33.4253, -70.6331)
+const dist1 = GeoMath.haversineDistance(-33.4489, -70.6693, -33.4253, -70.6331);
+console.log(`Distancia Santiago a San Cristóbal: ${dist1.toFixed(1)} m`);
+assert(dist1 > 4000 && dist1 < 5000, `Distancia esperada ~4.2km, obtenida: ${dist1}`);
 
-  // Test 2: Inclinado hacia arriba 10° mirando al Norte (beta=100)
-  const pitchUp = SensorFusion.calculateCameraOrientation(0, 100, 0);
-  assert(Math.abs(pitchUp.pitch - 10) < 0.1, `Pitch hacia arriba falló: esperado +10°, obtenido ${pitchUp.pitch}°`);
-  console.log('✔ Inclinación +10° hacia cerro/cielo: OK (+10.0°)');
+// Test 2: Rumbo / Bearing hacia el Noreste
+const bearing1 = GeoMath.calculateBearing(-33.4489, -70.6693, -33.4253, -70.6331);
+console.log(`Rumbo Santiago a San Cristóbal: ${bearing1.toFixed(1)}°`);
+assert(bearing1 > 35 && bearing1 < 65, `Rumbo esperado ~50°, obtenido: ${bearing1}`);
 
-  // Test 3: Inclinado hacia abajo 10° (beta=80)
-  const pitchDown = SensorFusion.calculateCameraOrientation(0, 80, 0);
-  assert(Math.abs(pitchDown.pitch - (-10)) < 0.1, `Pitch hacia abajo falló: esperado -10°, obtenido ${pitchDown.pitch}°`);
-  console.log('✔ Inclinación -10° hacia suelo: OK (-10.0°)');
+// Test 3: Ángulo de elevación y distancia 3D
+// Distancia horizontal 1000m, diferencia de altura 500m -> atan2(500, 1000) ~ 26.56°
+const elevAngle = GeoMath.calculateElevationAngle(1000, 500, 1000);
+console.log(`Ángulo de elevación: ${elevAngle.toFixed(2)}°`);
+assert(Math.abs(elevAngle - 26.565) < 0.01, `Ángulo esperado ~26.57°, obtenido: ${elevAngle}`);
 
-  console.log('\n=== [2] VALIDACIÓN CON CAPTURAS REALES DE USUARIO EN CHILE ===');
+const dist3D = GeoMath.calculate3DDistance(1000, 500, 1000);
+console.log(`Distancia 3D: ${dist3D.toFixed(1)} m`);
+assert(Math.abs(dist3D - 1118.03) < 0.1, `Distancia 3D esperada ~1118.03m, obtenida: ${dist3D}`);
 
-  // Captura #1 del usuario:
-  const c1 = SensorFusion.calculateCameraOrientation(22.2, 97.6, 76.8);
-  assert(c1.pitch > 0, `Pitch debe ser positivo al apuntar cerro (+1.73°), obtenido: ${c1.pitch}°`);
-  assert(Math.abs(c1.azimuth - 260.9) < 1.0, `Azimut Captura #1 debe ser ~261°, obtenido: ${c1.azimuth}°`);
-  console.log(`✔ Captura #1 Ángulos: Az=${c1.azimuth.toFixed(1)}°, Pitch=+${c1.pitch.toFixed(2)}°`);
+// Test 4: Formateo
+assert.strictEqual(GeoMath.formatDistance(450), '450 m');
+assert.strictEqual(GeoMath.formatDistance(1250), '1.25 km');
 
-  const res1 = await TerrainEngine.traceRay({
-    obsLat: -33.5836433,
-    obsLon: -70.7019017,
-    obsAlt: 561.6,
-    azimuth: c1.azimuth,
-    pitch: c1.pitch,
-    maxRange: 5000,
-    numSamples: 45
-  });
-  assert(res1.hasHit === true, 'Captura #1 debe impactar la colina');
-  assert(res1.slantRange > 2000 && res1.slantRange < 3000, `Distancia esperada 2-3km, obtenida: ${res1.slantRange}m`);
-  console.log(`✔ Captura #1 Raymarching: Impacto a ${res1.slantRange}m (Δh: +${res1.deltaHeight}m) [Cerro 2.4km confirmado]`);
+console.log('--- TEST SENSOR MANAGER LOGIC ---');
+const SensorManager = require('./sensorManager.js');
+const sm = new SensorManager();
+// Test lerp crossing North 359° to 2°
+const lerped = sm._lerpAngle(359, 2, 0.5);
+console.log(`Lerp entre 359° y 2° (t=0.5): ${lerped}°`);
+assert(Math.abs(lerped - 0.5) < 0.1, `Esperado ~0.5°, obtenido ${lerped}`);
 
-  // Captura #2 del usuario:
-  const c2 = SensorFusion.calculateCameraOrientation(63.4, 95.6, 73.5);
-  assert(c2.pitch > 0, `Pitch debe ser positivo (+1.59°), obtenido: ${c2.pitch}°`);
-  console.log(`✔ Captura #2 Ángulos: Az=${c2.azimuth.toFixed(1)}°, Pitch=+${c2.pitch.toFixed(2)}°`);
+// Test destination point: 1000m North from origin
+const dest = GeoMath.destinationPoint(0, 0, 1000, 0);
+const calcDist = GeoMath.haversineDistance(0, 0, dest.lat, dest.lon);
+console.log(`Punto proyectado a 1000m: dist calculada = ${calcDist.toFixed(1)}m`);
+assert(Math.abs(calcDist - 1000) < 1.0, `Error en proyección de punto geodésico: ${calcDist}`);
 
-  const res2 = await TerrainEngine.traceRay({
-    obsLat: -33.5841833,
-    obsLon: -70.7011083,
-    obsAlt: 561.6,
-    azimuth: c2.azimuth,
-    pitch: c2.pitch,
-    maxRange: 5000,
-    numSamples: 45
-  });
-  assert(res2.hasHit === true, 'Captura #2 debe impactar la colina');
-  assert(res2.slantRange > 2500 && res2.slantRange < 3500, `Distancia esperada ~2.9km, obtenida: ${res2.slantRange}m`);
-  console.log(`✔ Captura #2 Raymarching: Impacto a ${res2.slantRange}m (Δh: +${res2.deltaHeight}m) [Cerro 2.9km confirmado]`);
+console.log('✅ TODOS LOS TESTS PASARON EXITOSAMENTE');
 
-  console.log('\n=== [3] VALIDACIÓN DE MODO HORIZONTAL (LANDSCAPE) ===');
-
-  // Test Landscape Primary (alpha=270, beta=0, gamma=90) mirando al Norte
-  const landNorth = SensorFusion.calculateCameraOrientation(270, 0, 90);
-  assert(Math.abs(landNorth.azimuth - 0) < 0.1 || Math.abs(landNorth.azimuth - 360) < 0.1, `Azimut Landscape Norte falló: ${landNorth.azimuth}°`);
-  assert(Math.abs(landNorth.pitch - 0) < 0.1, `Pitch Landscape Norte falló: ${landNorth.pitch}°`);
-  console.log('✔ Modo Horizontal (Landscape Primary) apuntando al Norte: OK (Az 0°, Pitch 0°)');
-
-  // Test Landscape Roll Projection:
-  // Función auxiliar de prueba que emula la proyección de devicemotion en sensorFusion
-  function projectGravityRoll(accX, accY, screenAngle) {
-    const rad = (screenAngle * Math.PI) / 180.0;
-    const cos = Math.cos(rad);
-    const sin = Math.sin(rad);
-    const sx = cos * accX - sin * accY;
-    const sy = sin * accX + cos * accY;
-    return Math.atan2(sx, sy) * (180.0 / Math.PI);
-  }
-
-  const rollLandLevel = projectGravityRoll(9.8, 0, 90);
-  assert(Math.abs(rollLandLevel) < 0.01, `Nivel horizontal en Landscape falló: ${rollLandLevel}°`);
-  console.log('✔ Nivel de Horizonte Artificial en Landscape (0.0°): OK');
-
-  const rollLandTilt = projectGravityRoll(9.8 * Math.cos(10 * Math.PI / 180), -9.8 * Math.sin(10 * Math.PI / 180), 90);
-  assert(Math.abs(rollLandTilt - 10) < 0.01, `Inclinación lateral en Landscape falló: ${rollLandTilt}°`);
-  console.log('\n=== [4] VALIDACIÓN DEL MOTOR 3D AR Y VISIÓN SINTÉTICA (TERRAIN3DVIEW) ===');
-  const Terrain3DView = require('./terrain3DView.js');
-
-  // Test 4.1: Decodificación de Cota DEM Terrarium
-  const testElev = Terrain3DView.decodeTerrarium(128, 145, 0);
-  assert(Math.abs(testElev - 145) < 0.01, `Decodificación Terrarium falló: esperado 145m, obtenido ${testElev}m`);
-  console.log('✔ Decodificación DEM Terrarium (r, g, b -> metros): OK (145.0m)');
-
-  // Test 4.2: Conversión Geodésica Round-trip (Metros locales <-> Lat/Lon)
-  const obsLat = -33.5836433, obsLon = -70.7019017, obsAlt = 561.6;
-  const targetLat = -33.5650, targetLon = -70.6800;
-  const localMeters = Terrain3DView.latLonToLocalMeters(targetLat, targetLon, obsLat, obsLon);
-  const reconLatLon = Terrain3DView.localMetersToLatLon(localMeters.x, localMeters.z, obsLat, obsLon);
-  assert(Math.abs(reconLatLon.lat - targetLat) < 1e-6, 'Error en roundtrip latitud geodésica');
-  assert(Math.abs(reconLatLon.lon - targetLon) < 1e-6, 'Error en roundtrip longitud geodésica');
-  console.log(`✔ Conversión Geodésica Bidireccional: OK (Error < 10^-6 grados)`);
-
-  // Test 4.3: Telemetría de Impacto 3D por Toque
-  const simulatedHit = { x: localMeters.x, y: 320.0, z: localMeters.z };
-  const targetMetrics = Terrain3DView.calculateTargetMetrics(simulatedHit, obsLat, obsLon, obsAlt, 1.6);
-  assert(targetMetrics.slantRange > 2500 && targetMetrics.slantRange < 3500, `Rango inesperado: ${targetMetrics.slantRange}m`);
-  assert(targetMetrics.targetCoords.lat === targetLat, `Latitud de blanco no coincide`);
-  assert(targetMetrics.targetCoords.alt === Math.round(obsAlt + (320.0 - 1.6)), `Altitud de blanco incorrecta`);
-  console.log(`✔ Telemetría por Toque Directo: Slant=${targetMetrics.slantRange}m, Horiz=${targetMetrics.horizontalDistance}m, Cota Blanco=${targetMetrics.targetCoords.alt}m MSL`);
-
-  // Test 4.4: Mapeo de Tiles Terrarium a Coordenadas
-  const tileCoord = Terrain3DView.latLonToTileFraction(obsLat, obsLon, 12);
-  assert(Math.floor(tileCoord.x) === 1243 && Math.floor(tileCoord.y) === 2454, 'Mapeo de tile zoom 12 incorrecto');
-  console.log(`✔ Mapeo de Tile Copernicus/Terrarium: Zoom 12 (X: ${Math.floor(tileCoord.x)}, Y: ${Math.floor(tileCoord.y)}) OK`);
-
-  console.log('\n======================================================');
-  console.log('   TODAS LAS PRUEBAS UNITARIAS PASARON EXITOSAMENTE   ');
-  console.log('======================================================');
-}
-
-runTests().catch(err => {
-  console.error('ERROR EN PRUEBAS:', err);
-  process.exit(1);
-});

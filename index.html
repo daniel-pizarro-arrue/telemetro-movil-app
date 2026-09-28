@@ -3,292 +3,133 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="netlify-disable-drawer" content="true">
-  <title>Telémetro Móvil 3D - Láser Topográfico</title>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#030712">
+  <title>Telémetro Móvil 3D - Fotogrametría Fotorrealista</title>
+
+  <!-- Estilos CesiumJS -->
+  <link rel="stylesheet" href="https://unpkg.com/cesium@1.120.0/Build/Cesium/Widgets/widgets.css">
+
+  <!-- Estilos de la Aplicación -->
   <link rel="stylesheet" href="style.css">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <script>
+    // Configuración base de Cesium para recursos estáticos CDN
+    window.CESIUM_BASE_URL = 'https://unpkg.com/cesium@1.120.0/Build/Cesium/';
+  </script>
+  <!-- CesiumJS UMD Bundle -->
+  <script src="https://unpkg.com/cesium@1.120.0/Build/Cesium/Cesium.js"></script>
 </head>
 <body>
-  <div class="hud-app">
-    <!-- Capa de video de la cámara trasera y Visión Sintética 3D -->
-    <div class="camera-viewport">
-      <video id="camera-stream" autoplay playsinline muted></video>
-      <canvas id="svs-canvas"></canvas>
-      <div class="camera-placeholder" id="camera-placeholder">
-        <div class="placeholder-icon">📷</div>
-        <p>Cámara no iniciada</p>
-        <button class="btn btn-sm btn-outline" id="btn-start-camera">Activar Cámara Trasera</button>
+
+  <!-- Contenedor del Visor 3D Fullscreen -->
+  <div id="cesiumContainer"></div>
+
+  <!-- Capa HUD Táctica -->
+  <div id="hudOverlay">
+    
+    <!-- Barra Superior -->
+    <header class="hud-header">
+      <div class="title-badge">
+        <div class="radar-dot"></div>
+        <span class="title-text">TELÉMETRO 3D // HUD</span>
+      </div>
+
+      <div class="header-status-group">
+        <span id="gpsStatusChip" class="status-chip">GPS: BUSCANDO...</span>
+        <button id="modeToggleBtn" class="status-chip active" title="Alternar entre modo sensores y navegación libre">
+          MODO: BRÚJULA
+        </button>
+      </div>
+    </header>
+
+    <!-- Cinta de Brújula Superior -->
+    <div class="compass-ribbon">
+      <span class="compass-cardinal" id="compassCardinal">N</span>
+      <span class="compass-value" id="compassHeading">000°</span>
+      <span class="compass-cardinal" id="compassPitch">0.0°</span>
+    </div>
+
+    <!-- Mensaje Toast de Estado -->
+    <div id="statusToast">Cargando mapa 3D fotorrealista...</div>
+
+    <!-- Retícula Central Táctica -->
+    <div class="reticle-container">
+      <div class="reticle-ring"></div>
+      <div class="reticle-inner-dot"></div>
+      <div class="reticle-line horizontal-left"></div>
+      <div class="reticle-line horizontal-right"></div>
+      <div class="reticle-line vertical-top"></div>
+      <div class="reticle-line vertical-bottom"></div>
+      <div id="reticlePitchBadge" class="reticle-pitch-badge">0°</div>
+    </div>
+
+    <!-- Calibrador de Brújula (Alineación fina con cerros reales) -->
+    <div class="calibration-bar" id="calibrationBar">
+      <label for="headingOffsetRange">Calibrar Azimut:</label>
+      <input type="range" id="headingOffsetRange" min="-45" max="45" value="0" step="1">
+      <span class="calibration-val" id="headingOffsetVal">0°</span>
+    </div>
+
+    <!-- Tarjeta de Resultados de Telemetría -->
+    <div class="telemetry-card" id="telemetryCard">
+      <div class="telemetry-primary-grid">
+        <div class="telemetry-hero">
+          <span class="label">Distancia 3D</span>
+          <span class="val-big" id="resDirectDist">---</span>
+        </div>
+        <div class="telemetry-stat">
+          <span class="label">Dist. Horiz.</span>
+          <span class="val" id="resHorizDist">---</span>
+        </div>
+        <div class="telemetry-stat">
+          <span class="label">Desnivel ΔH</span>
+          <span class="val" id="resDeltaH">---</span>
+        </div>
+      </div>
+
+      <div class="telemetry-secondary-row">
+        <span>Rumbo: <strong id="resBearing">---</strong></span>
+        <span>Ángulo: <strong id="resAngle">---</strong></span>
+      </div>
+
+      <div class="telemetry-secondary-row">
+        <span>Destino: <strong id="resCoords">Toca un punto o dispara al centro</strong></span>
+      </div>
+
+      <div class="telemetry-firebase-status">
+        <span id="firebaseIndicator">●</span>
+        <span id="firebaseText">Telemetría conectada a Firebase RTDB</span>
       </div>
     </div>
 
-    <!-- HUD Overlay: Brújula Superior, Retícula Central y Datos -->
-    <div class="hud-overlay">
-      <!-- Barra Superior: Rumbo / Azimut en cinta militar (Milésimas Artilleras 6400) -->
-      <header class="hud-topbar">
-        <div class="compass-tape-container">
-          <div class="compass-tape" id="compass-tape">
-            <span class="compass-cardinal">N 00</span> · · 
-            <span class="compass-deg">08</span> · · 
-            <span class="compass-cardinal">E 16</span> · · 
-            <span class="compass-deg">24</span> · · 
-            <span class="compass-cardinal">S 32</span> · · 
-            <span class="compass-deg">40</span> · · 
-            <span class="compass-cardinal">W 48</span> · · 
-            <span class="compass-deg">56</span> · · 
-            <span class="compass-cardinal">N 64</span>
-          </div>
-          <div class="compass-marker">▼</div>
-        </div>
+    <!-- Barra de Acciones Inferior -->
+    <footer class="hud-bottom-actions">
+      <button id="btnSensors" class="btn-tactical" title="Activar giroscopio y brújula">
+        🧭 SENSORES
+      </button>
 
-        <div class="hud-quick-stats">
-          <!-- Conmutador de Modos: Láser vs 3D AR -->
-          <div class="mode-toggle-group" id="mode-selector">
-            <button class="mode-pill-btn active" id="btn-mode-laser" data-mode="laser">🎯 Láser</button>
-            <button class="mode-pill-btn" id="btn-mode-svs" data-mode="svs">🌐 3D AR</button>
-          </div>
+      <button id="btnMeasure" class="btn-tactical primary" title="Medir distancia al objetivo en la retícula central">
+        🎯 MEDIR
+      </button>
 
-          <div class="stat-pill" title="Azimut Geográfico Verdadero (Milésimas)">
-            <span class="stat-lbl">AZ V:</span>
-            <span class="stat-val font-mono" id="hud-azimuth">00-00 ₥</span>
-          </div>
-          <div class="stat-pill" title="Inclinación / Elevación (Milésimas)">
-            <span class="stat-lbl">INC:</span>
-            <span class="stat-val font-mono" id="hud-pitch">0 ₥</span>
-          </div>
-          <div class="stat-pill" title="Inclinación Lateral / Alabeo">
-            <span class="stat-lbl">ROLL:</span>
-            <span class="stat-val font-mono" id="hud-roll">0.0°</span>
-          </div>
-          <div class="stat-pill" title="Rango Máximo Láser">
-            <span class="stat-lbl">RNG:</span>
-            <span class="stat-val font-mono" style="color: var(--hud-green);">5.0 KM</span>
-          </div>
-          <button class="stat-pill btn-fullscreen" id="btn-fullscreen" title="Modo Pantalla Completa">⛶</button>
-        </div>
-      </header>
+      <button id="btnFreeze" class="btn-tactical" title="Fijar orientación para apuntar">
+        ❄️ FIJAR
+      </button>
 
-      <!-- Barra de Calibración Táctica 3D AR (Activa en Modo 3D AR) -->
-      <div class="svs-toolbar" id="svs-toolbar" style="display: none;">
-        <div class="svs-toolbar-row">
-          <button class="svs-btn" id="btn-svs-freeze" title="Fijar el mapa 3D para alinear con la cámara real">
-            <span class="svs-btn-icon" id="svs-freeze-icon">🔓</span>
-            <span class="svs-btn-text" id="svs-freeze-text">Fijar Mapa</span>
-          </button>
-          
-          <div class="svs-slider-group" title="Transparencia del Mapa 3D">
-            <span class="svs-slider-lbl">Alfa:</span>
-            <input type="range" id="slider-svs-opacity" min="10" max="100" value="70" class="svs-range">
-            <span class="svs-slider-val font-mono" id="val-svs-opacity">70%</span>
-          </div>
+      <button id="btnClear" class="btn-tactical" title="Limpiar objetivo">
+        ✕
+      </button>
+    </footer>
 
-          <div class="svs-zoom-group">
-            <button class="svs-btn-icon-only" id="btn-svs-zoom-out" title="Alejar Zoom">-</button>
-            <span class="svs-zoom-lbl font-mono" id="val-svs-zoom">1.0x</span>
-            <button class="svs-btn-icon-only" id="btn-svs-zoom-in" title="Acercar Zoom">+</button>
-          </div>
-
-          <button class="svs-btn-icon-only" id="btn-svs-map-style" title="Alternar Fotografía Satelital / Mapa Topográfico">📸</button>
-          <button class="svs-btn-icon-only" id="btn-svs-wireframe" title="Alternar Malla de Contorno">🕸️</button>
-          <button class="svs-btn-icon-only" id="btn-svs-reset" title="Restablecer Calibración">↺</button>
-        </div>
-
-        <div class="svs-status-banner" id="svs-status-banner">
-          <span class="svs-banner-dot"></span>
-          <span id="svs-banner-text">Mueva el teléfono hacia el cerro o toque un punto para medir</span>
-        </div>
-      </div>
-
-      <!-- Retícula Táctica Central (Crosshair Militar Mil-Dot) -->
-      <div class="hud-reticle">
-        <div class="reticle-circle outer"></div>
-        <div class="reticle-circle inner"></div>
-        <div class="reticle-axis h-line left"></div>
-        <div class="reticle-axis h-line right"></div>
-        <div class="reticle-axis v-line top"></div>
-        <div class="reticle-axis v-line bottom"></div>
-        <div class="reticle-dot center-pip"></div>
-        
-        <!-- Nivelador artificial de horizonte -->
-        <div class="artificial-horizon" id="artificial-horizon">
-          <div class="horizon-line"></div>
-        </div>
-
-        <!-- Escala milimétrica de inclinación vertical en milésimas -->
-        <div class="pitch-ladder" id="pitch-ladder">
-          <span class="ladder-mark">+100 ₥</span>
-          <span class="ladder-mark">+50 ₥</span>
-          <span class="ladder-mark zero">0 ₥</span>
-          <span class="ladder-mark">-50 ₥</span>
-          <span class="ladder-mark">-100 ₥</span>
-        </div>
-      </div>
-
-      <!-- Barra de Estado GPS y Posición del Observador -->
-      <div class="hud-gps-bar">
-        <div class="gps-cell">
-          <span class="cell-label">GPS OBS</span>
-          <span class="cell-val font-mono" id="gps-coords">Buscando satélites...</span>
-        </div>
-        <div class="gps-cell">
-          <span class="cell-label">PRECISIÓN</span>
-          <span class="cell-val font-mono" id="gps-accuracy">--</span>
-        </div>
-        <div class="gps-cell">
-          <span class="cell-label">COTA BASE + OJOS</span>
-          <span class="cell-val font-mono" id="gps-terrain-alt">DEM: -- (+1.6m)</span>
-        </div>
-      </div>
-
-      <!-- Controles Inferiores y Botón Disparador Láser -->
-      <footer class="hud-controls">
-        <div class="controls-row-top">
-          <!-- Selector de Postura (Por defecto De pie 1.60m) -->
-          <div class="selector-group">
-            <label class="control-label">Postura</label>
-            <div class="pill-selector" id="posture-selector">
-              <button class="pill-btn active" data-height="1.60">Pie (1.6m)</button>
-              <button class="pill-btn" data-height="1.10">Rodilla (1.1m)</button>
-              <button class="pill-btn" data-height="0.35">Tendido (0.3m)</button>
-            </div>
-          </div>
-
-          <!-- Selector de Unidades (Por defecto Milésimas 6400) -->
-          <div class="selector-group">
-            <label class="control-label">Unidad</label>
-            <div class="pill-selector" id="unit-selector">
-              <button class="pill-btn active" data-unit="mils">Mils (6400 ₥)</button>
-              <button class="pill-btn" data-unit="deg">Grados (°)</button>
-            </div>
-          </div>
-
-          <!-- Calibración Rápida de Nivel / Cero -->
-          <div class="selector-group">
-            <label class="control-label">Nivel / Tara</label>
-            <div class="pill-selector">
-              <button class="pill-btn" id="btn-tare-pitch" title="Ajusta el visor a nivel 0 ₥">⚖️ Cero</button>
-              <button class="pill-btn" id="btn-reset-pitch" title="Restablecer calibración">↺ Reset</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Botón Disparador de Medición Láser -->
-        <div class="trigger-container">
-          <button class="btn-laser-trigger" id="btn-measure">
-            <span class="laser-beam-effect"></span>
-            <span class="trigger-icon">🎯</span>
-            <span class="trigger-text">MEDIR DISTANCIA (LÁSER)</span>
-          </button>
-        </div>
-      </footer>
-    </div>
-
-    <!-- Modal / Hoja de Resultados Telemetría y Perfil Topográfico -->
-    <div class="telemetry-sheet" id="telemetry-sheet">
-      <div class="sheet-handle" id="sheet-close-handle"></div>
-      
-      <div class="sheet-header">
-        <div class="sheet-title">
-          <span class="pulse-indicator"></span>
-          <h3>IMPACTO LÁSER TOPOGRÁFICO</h3>
-        </div>
-        <button class="btn-close-sheet" id="btn-close-sheet">✕</button>
-      </div>
-
-      <!-- Contenedor Dual Grid (Columna única en vertical / Dos columnas en horizontal) -->
-      <div class="sheet-body-grid">
-        <div class="sheet-col-profile">
-          <!-- Canvas de Perfil Topográfico Transversal -->
-          <div class="profile-card">
-            <div class="profile-header">
-              <span>CORTE TRANSVERSAL DEL TERRENO (RAYMARCHING)</span>
-              <span class="badge-copernicus">DEM Copernicus 30m</span>
-            </div>
-            <div class="canvas-wrapper">
-              <canvas id="terrain-canvas" width="600" height="240"></canvas>
-            </div>
-            <div class="profile-legend">
-              <span class="legend-item"><span class="color-dot observer"></span> Observador</span>
-              <span class="legend-item"><span class="color-dot ray"></span> Haz Láser</span>
-              <span class="legend-item"><span class="color-dot terrain"></span> Terreno Real</span>
-              <span class="legend-item"><span class="color-dot hit"></span> Impacto</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="sheet-col-metrics">
-          <!-- Métricas Principales -->
-          <div class="metrics-grid">
-            <div class="metric-card primary">
-              <span class="metric-lbl">DISTANCIA REAL (LÍNEA DE MIRA)</span>
-              <div class="metric-val-group">
-                <span class="metric-val font-mono" id="res-slant-range">0</span>
-                <span class="metric-unit">m</span>
-              </div>
-            </div>
-
-            <div class="metric-card">
-              <span class="metric-lbl">DISTANCIA HORIZONTAL</span>
-              <div class="metric-val-group">
-                <span class="metric-val font-mono" id="res-horizontal-dist">0</span>
-                <span class="metric-unit">m</span>
-              </div>
-            </div>
-
-            <div class="metric-card">
-              <span class="metric-lbl">DESNIVEL RELATIVO (Δh)</span>
-              <div class="metric-val-group">
-                <span class="metric-val font-mono" id="res-delta-alt">0</span>
-                <span class="metric-unit">m</span>
-              </div>
-            </div>
-
-            <div class="metric-card">
-              <span class="metric-lbl">ÁNGULO DE SITIO</span>
-              <div class="metric-val-group">
-                <span class="metric-val font-mono" id="res-pitch">0.0°</span>
-              </div>
-            </div>
-
-            <div class="metric-card">
-              <span class="metric-lbl">RUMBO VERDADERO</span>
-              <div class="metric-val-group">
-                <span class="metric-val font-mono" id="res-azimuth">000.0°</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Coordenadas del Objetivo Impactado -->
-          <div class="target-location-card">
-            <div class="target-row">
-              <span class="target-lbl">COORDENADAS BLANCO:</span>
-              <span class="target-val font-mono" id="res-target-coords">-- , --</span>
-            </div>
-            <div class="target-row">
-              <span class="target-lbl">COTA TERRENO BLANCO:</span>
-              <span class="target-val font-mono" id="res-target-alt">-- m MSL</span>
-            </div>
-          </div>
-
-          <div class="sheet-actions">
-            <button class="btn btn-secondary btn-full" id="btn-open-maps">
-              <span>🗺️</span> Ver Ubicación del Blanco en Google Maps
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Notificación / Toast de Alerta o Diagnóstico -->
-    <div class="toast-notification" id="toast-msg"></div>
   </div>
 
-  <script src="three.min.js"></script>
-  <script src="terrain3DView.js"></script>
-  <script src="terrainEngine.js"></script>
-  <script src="sensorFusion.js"></script>
+  <!-- Scripts de la Aplicación -->
   <script src="telemetryLogger.js"></script>
+  <script src="geoMath.js"></script>
+  <script src="sensorManager.js"></script>
+  <script src="cesium3DMap.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
