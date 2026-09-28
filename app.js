@@ -13,8 +13,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const compassRibbon = document.getElementById('compassRibbon');
   const compassHeadingMils = document.getElementById('compassHeadingMils');
-  const compassCardinal = document.getElementById('compassCardinal');
   const opticsZoomLevel = document.getElementById('opticsZoomLevel');
+
+  const heightControlWidget = document.getElementById('heightControlWidget');
+  const btnHeightUp = document.getElementById('btnHeightUp');
+  const btnHeightDown = document.getElementById('btnHeightDown');
+  const heightDisplayVal = document.getElementById('heightDisplayVal');
 
   const centerLocationPin = document.getElementById('centerLocationPin');
   const locationConfirmCard = document.getElementById('locationConfirmCard');
@@ -44,12 +48,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     toastTimer = setTimeout(() => {
       statusToast.classList.remove('visible');
     }, duration);
-  }
-
-  function getCardinal(deg) {
-    const cardinals = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSO', 'SO', 'OSO', 'O', 'ONO', 'NO', 'NNO'];
-    const idx = Math.round(deg / 22.5) % 16;
-    return cardinals[idx];
   }
 
   function updateGpsUI(status, customLabel) {
@@ -143,18 +141,24 @@ document.addEventListener('DOMContentLoaded', async () => {
       syncWithFirebase(data);
     };
 
-    // Actualizar cinta de rumbo en rotación táctil in-place
+    // Actualizar cinta de rumbo en rotación táctil in-place (solo milésimas)
     cesiumMap.onOrientationChanged = (heading, pitch) => {
       const GeoMath = window.GeoMath;
       const mils = GeoMath ? GeoMath.degreesToMils(heading) : Math.round((heading * 6400) / 360);
       compassHeadingMils.textContent = GeoMath ? GeoMath.formatMils(mils) : `${mils} ₥`;
-      compassCardinal.textContent = getCardinal(heading);
     };
 
     // Actualizar indicador de aumento óptico en zoom / pellizco
     cesiumMap.onZoomChanged = (magnification, fov) => {
       if (opticsZoomLevel) {
         opticsZoomLevel.textContent = `${magnification.toFixed(1)}x`;
+      }
+    };
+
+    // Sincronizar display numérico de altura
+    cesiumMap.onHeightChanged = (h) => {
+      if (heightDisplayVal) {
+        heightDisplayVal.textContent = h.toFixed(1);
       }
     };
 
@@ -188,7 +192,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const mils = GeoMath ? GeoMath.degreesToMils(ori.heading) : Math.round((ori.heading * 6400) / 360);
 
     compassHeadingMils.textContent = GeoMath ? GeoMath.formatMils(mils) : `${mils} ₥`;
-    compassCardinal.textContent = getCardinal(ori.heading);
 
     // Solo rota la cámara si la brújula está ACTIVADA por el usuario
     if (cesiumMap && isCompassActive) {
@@ -233,6 +236,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     compassRibbon.classList.remove('hidden');
     postureBtn.classList.remove('hidden');
     modeToggleBtn.classList.remove('hidden');
+    if (heightControlWidget) heightControlWidget.classList.remove('hidden');
     reticleContainer.classList.remove('hidden');
     bottomActions.classList.remove('hidden');
 
@@ -253,8 +257,48 @@ document.addEventListener('DOMContentLoaded', async () => {
     postureBtn.title = `Postura: ${posture.name} (${posture.height}m)`;
 
     cesiumMap.setPostureHeight(posture.height);
+    if (heightDisplayVal) {
+      heightDisplayVal.textContent = posture.height.toFixed(1);
+    }
     showToast(`Postura: ${posture.name} (${posture.height}m)`, 2000);
   });
+
+  // ─── 4.1. CONTROL DE AJUSTE FINO DE ALTURA (STEPPER CON PRESS-AND-HOLD) ───
+  function setupHeightStepper() {
+    if (!btnHeightUp || !btnHeightDown) return;
+
+    let holdInterval = null;
+
+    function step(delta) {
+      if (!cesiumMap) return;
+      const newH = cesiumMap.adjustHeight(delta);
+      if (heightDisplayVal) heightDisplayVal.textContent = newH.toFixed(1);
+    }
+
+    function bindButton(btn, delta) {
+      btn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        step(delta);
+        clearInterval(holdInterval);
+        holdInterval = setInterval(() => {
+          step(delta);
+        }, 80);
+      });
+
+      const stopHold = () => {
+        clearInterval(holdInterval);
+      };
+
+      btn.addEventListener('pointerup', stopHold);
+      btn.addEventListener('pointerleave', stopHold);
+      btn.addEventListener('pointercancel', stopHold);
+    }
+
+    bindButton(btnHeightUp, +0.2);
+    bindButton(btnHeightDown, -0.2);
+  }
+
+  setupHeightStepper();
 
   // ─── 5. BOTÓN DE BRÚJULA (ACTIVADA / DESACTIVADA) ─────────────────────────
   modeToggleBtn.addEventListener('click', async () => {

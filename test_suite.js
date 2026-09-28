@@ -114,6 +114,29 @@ camAlt = mapCtrl.groundAltitudeLocked + mapCtrl.postureHeight;
 console.log(`Cámara tendido (0.3m sobre ${groundElevation}m): ${camAlt.toFixed(2)}m`);
 assert.strictEqual(camAlt, 562.8);
 
+console.log('--- TEST AJUSTE FINO DE ALTURA (STEPPER) ---');
+// Test adjustHeight(+0.2)
+mapCtrl.controlMode = 'first_person_free';
+let adjustedH = mapCtrl.adjustHeight(0.2);
+console.log(`Altura tras subir +0.2m: ${adjustedH.toFixed(2)}m (esperado 0.50m)`);
+assert.strictEqual(adjustedH, 0.5);
+
+adjustedH = mapCtrl.adjustHeight(-0.2);
+console.log(`Altura tras bajar -0.2m: ${adjustedH.toFixed(2)}m (esperado 0.30m)`);
+assert.strictEqual(adjustedH, 0.3);
+
+// Test clamping mínimo a 0.05m
+mapCtrl.adjustHeight(-5.0);
+assert.strictEqual(mapCtrl.postureHeight, 0.05, 'Debe clamplear a min 0.05m');
+
+// Test setCustomHeight
+mapCtrl.setCustomHeight(2.4);
+assert.strictEqual(mapCtrl.postureHeight, 2.4);
+
+// Test preloadRadius5km method exists and runs without throw
+assert.strictEqual(typeof mapCtrl.preloadRadius5km, 'function');
+mapCtrl.preloadRadius5km(-33.45, -70.67);
+
 console.log('✅ TODOS LOS TESTS PASARON EXITOSAMENTE');
 
 

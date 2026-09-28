@@ -37,7 +37,6 @@
 
       <!-- Cinta de Azimut en Milésimas y Zoom Óptico (visible en primera persona) -->
       <div class="compass-ribbon hidden" id="compassRibbon">
-        <span class="compass-cardinal" id="compassCardinal">N</span>
         <span class="compass-value" id="compassHeadingMils">0000 ₥</span>
         <span class="compass-zoom" id="opticsZoomLevel" title="Aumento óptico">1.0x</span>
       </div>
@@ -67,6 +66,23 @@
         </button>
       </div>
     </header>
+
+    <!-- Control Táctico de Altura Personalizada (Primera Persona) -->
+    <div class="height-stepper-widget hidden" id="heightControlWidget">
+      <button id="btnHeightUp" class="height-step-btn" title="Subir altura (+0.2m)">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="18 15 12 9 6 15"/>
+        </svg>
+      </button>
+      <div class="height-step-display" id="heightDisplay" title="Altura del observador sobre el suelo">
+        <span class="height-num" id="heightDisplayVal">1.6</span><span class="height-unit">m</span>
+      </div>
+      <button id="btnHeightDown" class="height-step-btn" title="Bajar altura (-0.2m)">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+    </div>
 
     <!-- Toast de Notificación Rápida -->
     <div id="statusToast">Buscando satélites GPS...</div>

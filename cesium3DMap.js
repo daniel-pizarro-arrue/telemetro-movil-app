@@ -47,6 +47,7 @@
       this.onStatusChange = null;
       this.onOrientationChanged = null; // (heading, pitch) => {}
       this.onZoomChanged = null; // (magnification, fov) => {}
+      this.onHeightChanged = null; // (postureHeight, totalCamAlt) => {}
     }
 
     async init() {
@@ -89,6 +90,11 @@
       const scene = this.viewer.scene;
       scene.backgroundColor = Cesium.Color.fromCssColorString('#020617');
 
+      // Desactivar detección de colisiones de Cesium para evitar que la cámara se teletransporte hacia arriba al rotar
+      if (scene.screenSpaceCameraController) {
+        scene.screenSpaceCameraController.enableCollisionDetection = false;
+      }
+
       if (scene.postProcessStages?.fxaa) {
         scene.postProcessStages.fxaa.enabled = true;
       }
@@ -115,15 +121,19 @@
         this.tileset = await Cesium.createGooglePhotorealistic3DTileset(this.googleApiKey);
         scene.primitives.add(this.tileset);
 
-        this.tileset.maximumScreenSpaceError = 24;
+        // Optimización agresiva de carga: retención masiva en RAM/GPU (2GB) y sin corte de peticiones
+        this.tileset.maximumScreenSpaceError = 16;
         this.tileset.skipLevelOfDetail = true;
         this.tileset.baseScreenSpaceError = 1024;
         this.tileset.skipScreenSpaceErrorFactor = 16;
-        this.tileset.cullRequestsWhileMoving = true;
-        this.tileset.cullRequestsWhileMovingMultiplier = 60.0;
-        this.tileset.dynamicScreenSpaceError = true;
+        this.tileset.skipLevels = 1;
+        this.tileset.immediatelyLoadDesiredLevelOfDetail = true;
+        this.tileset.loadSiblings = true; // Carga continua de mosaicos adyacentes 360°
+        this.tileset.preloadWhenHidden = true;
         this.tileset.preloadFlightCamera = true;
-        this.tileset.maximumMemoryUsage = 384;
+        this.tileset.cullRequestsWhileMoving = false; // NO cancelar peticiones de descarga al girar la cámara
+        this.tileset.dynamicScreenSpaceError = true;
+        this.tileset.maximumMemoryUsage = 2048; // 2 GB de caché para no descartar texturas ya descargadas
 
         this._notifyStatus('✅ Mapa 3D cargado');
       } catch (err) {
@@ -486,10 +496,61 @@
             if (this.onZoomChanged) {
               this.onZoomChanged(1.0, this.currentFov);
             }
+            if (this.onHeightChanged) {
+              this.onHeightChanged(this.postureHeight, totalCamAlt);
+            }
+            // Iniciar precarga de radio 5km en segundo plano automáticamente
+            this.preloadRadius5km(this.userLat, this.userLng);
             resolve();
           }
         });
       });
+    }
+
+    /**
+     * Descarga y precarga en segundo plano la totalidad de la malla 3D en un radio de 5 kilómetros
+     */
+    preloadRadius5km(lat, lng) {
+      if (!this.viewer || !this.viewer.scene) return;
+      const Cesium = (typeof window !== 'undefined' && window.Cesium) ? window.Cesium : (typeof globalThis !== 'undefined' ? globalThis.Cesium : null);
+      const GeoMath = (typeof window !== 'undefined' && window.GeoMath) ? window.GeoMath : (typeof require === 'function' ? require('./geoMath.js') : null);
+      if (!Cesium || !Cesium.Cartographic) return;
+
+      // Anillos concéntricos de muestreo denso hasta 5.000m
+      const rings = [
+        { dist: 400, count: 8 },
+        { dist: 1000, count: 8 },
+        { dist: 2000, count: 12 },
+        { dist: 3500, count: 16 },
+        { dist: 5000, count: 20 }
+      ];
+
+      const cartos = [Cesium.Cartographic.fromDegrees(lng, lat)];
+      if (GeoMath?.destinationPoint) {
+        for (const ring of rings) {
+          const step = 360 / ring.count;
+          for (let b = 0; b < 360; b += step) {
+            const dest = GeoMath.destinationPoint(lat, lng, ring.dist, b);
+            cartos.push(Cesium.Cartographic.fromDegrees(dest.lon, dest.lat));
+          }
+        }
+      }
+
+      console.log(`[Cesium3DMap] Precargando ${cartos.length} sectores 3D en radio de 5km...`);
+
+      // Ejecutar de forma no bloqueante en segundo plano
+      setTimeout(async () => {
+        try {
+          this._notifyStatus('📥 Descargando mapa 3D (radio 5 km)...');
+          if (this.viewer?.scene?.sampleHeightMostDetailed) {
+            await this.viewer.scene.sampleHeightMostDetailed(cartos);
+          }
+          console.log('[Cesium3DMap] Precarga de radio 5km completada.');
+          this._notifyStatus('✅ Malla 3D (5 km) precargada en memoria');
+        } catch (err) {
+          console.warn('[Cesium3DMap] Precarga 5km parcial:', err);
+        }
+      }, 500);
     }
 
     /**
@@ -499,12 +560,60 @@
       this.postureHeight = heightMeters;
       if (this.controlMode === 'aerial') return;
 
-      const Cesium = window.Cesium;
+      const Cesium = (typeof window !== 'undefined' && window.Cesium) ? window.Cesium : (typeof globalThis !== 'undefined' ? globalThis.Cesium : null);
       const baseGround = this.groundAltitudeLocked !== null ? this.groundAltitudeLocked : this.userAlt;
       const totalCamAlt = baseGround + this.postureHeight;
-      this._cachedDestination = Cesium.Cartesian3.fromDegrees(this.userLng, this.userLat, totalCamAlt);
+      if (Cesium?.Cartesian3) {
+        this._cachedDestination = Cesium.Cartesian3.fromDegrees(this.userLng, this.userLat, totalCamAlt);
+      }
 
       this.updateCameraOrientation();
+
+      if (this.onHeightChanged) {
+        this.onHeightChanged(this.postureHeight, totalCamAlt);
+      }
+    }
+
+    /**
+     * Ajusta suavemente la altura de la cámara sumando o restando deltaMeters de forma personalizada
+     */
+    adjustHeight(deltaMeters) {
+      if (this.controlMode === 'aerial') return this.postureHeight;
+      const Cesium = (typeof window !== 'undefined' && window.Cesium) ? window.Cesium : (typeof globalThis !== 'undefined' ? globalThis.Cesium : null);
+      // Clampear entre 0.05m (ras de suelo) y 50.0m
+      this.postureHeight = Math.max(0.05, Math.min(50.0, +(this.postureHeight + deltaMeters).toFixed(2)));
+
+      const baseGround = this.groundAltitudeLocked !== null ? this.groundAltitudeLocked : this.userAlt;
+      const totalCamAlt = baseGround + this.postureHeight;
+      if (Cesium?.Cartesian3) {
+        this._cachedDestination = Cesium.Cartesian3.fromDegrees(this.userLng, this.userLat, totalCamAlt);
+      }
+
+      this.updateCameraOrientation();
+
+      if (this.onHeightChanged) {
+        this.onHeightChanged(this.postureHeight, totalCamAlt);
+      }
+      return this.postureHeight;
+    }
+
+    setCustomHeight(heightMeters) {
+      if (this.controlMode === 'aerial') return this.postureHeight;
+      const Cesium = (typeof window !== 'undefined' && window.Cesium) ? window.Cesium : (typeof globalThis !== 'undefined' ? globalThis.Cesium : null);
+      this.postureHeight = Math.max(0.05, Math.min(50.0, +heightMeters.toFixed(2)));
+
+      const baseGround = this.groundAltitudeLocked !== null ? this.groundAltitudeLocked : this.userAlt;
+      const totalCamAlt = baseGround + this.postureHeight;
+      if (Cesium?.Cartesian3) {
+        this._cachedDestination = Cesium.Cartesian3.fromDegrees(this.userLng, this.userLat, totalCamAlt);
+      }
+
+      this.updateCameraOrientation();
+
+      if (this.onHeightChanged) {
+        this.onHeightChanged(this.postureHeight, totalCamAlt);
+      }
+      return this.postureHeight;
     }
 
     /**
@@ -514,6 +623,9 @@
       this.controlMode = mode;
       const controller = this.viewer?.scene?.screenSpaceCameraController;
       if (!controller) return;
+
+      // Desactivar detección de colisiones de Cesium en todos los modos para evitar teletransportes verticales
+      controller.enableCollisionDetection = false;
 
       if (mode === 'first_person_sensor' || mode === 'first_person_free') {
         // En primera persona desactivamos los controles GIS nativos de Cesium para bloquear la posición (CERO DESPLAZAMIENTO)
@@ -552,6 +664,11 @@
     updateCameraOrientation() {
       if (!this.viewer || !this.viewer.camera || !this._cachedDestination) return;
       const Cesium = window.Cesium;
+
+      // Asegurar que la detección de colisiones permanezca siempre desactivada
+      if (this.viewer?.scene?.screenSpaceCameraController) {
+        this.viewer.scene.screenSpaceCameraController.enableCollisionDetection = false;
+      }
 
       const headingRad = Cesium.Math.toRadians(this.heading);
       const pitchRad = Cesium.Math.toRadians(Math.max(-88.0, Math.min(88.0, this.pitch)));

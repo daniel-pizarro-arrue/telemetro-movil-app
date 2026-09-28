@@ -152,7 +152,7 @@ html, body {
   50% { transform: scale(1.15); opacity: 1.0; }
 }
 
-/* Cinta de Azimut en Milésimas */
+/* Cinta de Azimut en Milésimas y Zoom */
 .compass-ribbon {
   background: rgba(10, 16, 26, 0.85);
   border: 1px solid var(--border-glow);
@@ -163,12 +163,6 @@ html, body {
   gap: 8px;
   backdrop-filter: blur(8px);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
-}
-
-.compass-cardinal {
-  color: var(--text-muted);
-  font-weight: 700;
-  font-size: 13px;
 }
 
 .compass-value {
@@ -185,6 +179,77 @@ html, body {
   padding-left: 8px;
   border-left: 1px solid rgba(255, 255, 255, 0.2);
   letter-spacing: 0.5px;
+}
+
+/* Control Táctico de Altura Personalizada (Stepper) */
+.height-stepper-widget {
+  position: absolute;
+  right: 14px;
+  top: 76px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: rgba(10, 16, 26, 0.88);
+  border: 1px solid var(--border-glow);
+  border-radius: 22px;
+  padding: 6px 4px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+  z-index: 50;
+  touch-action: manipulation;
+  user-select: none;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.height-stepper-widget.hidden {
+  display: none !important;
+}
+
+.height-step-btn {
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cyan-bright);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.height-step-btn:hover {
+  border-color: var(--cyan-bright);
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.4);
+}
+
+.height-step-btn:active {
+  background: rgba(0, 240, 255, 0.25);
+  transform: scale(0.92);
+}
+
+.height-step-display {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  padding: 2px 2px;
+  min-width: 36px;
+}
+
+.height-num {
+  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
+  font-family: monospace;
+}
+
+.height-unit {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-left: 1px;
 }
 
 /* Botones de Icono en Header (Brújula y Postura) */
