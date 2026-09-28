@@ -383,6 +383,113 @@ html, body {
   to { transform: translate(-50%, 0); opacity: 1; }
 }
 
+/* 📥 OVERLAY DE DESCARGA DE MAPA 3D (BARRA DE PROGRESO) */
+.map-progress-overlay {
+  position: absolute;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 36px);
+  max-width: 440px;
+  z-index: 100;
+  pointer-events: none;
+  animation: slide-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.map-progress-overlay.hidden {
+  display: none !important;
+}
+
+.map-progress-card {
+  background: rgba(10, 16, 26, 0.92);
+  border: 1px solid var(--border-glow);
+  border-radius: 18px;
+  padding: 14px 18px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8), 0 0 20px rgba(0, 240, 255, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.map-progress-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.map-progress-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(0, 240, 255, 0.12);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cyan-bright);
+  flex-shrink: 0;
+  animation: pulse-icon 1.5s infinite;
+}
+
+@keyframes pulse-icon {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 rgba(0, 240, 255, 0); }
+  50% { transform: scale(1.06); box-shadow: 0 0 12px rgba(0, 240, 255, 0.4); }
+}
+
+.map-progress-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-grow: 1;
+  overflow: hidden;
+}
+
+.map-progress-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.map-progress-subtitle {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.map-progress-pct {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--cyan-bright);
+  font-family: monospace;
+  min-width: 44px;
+  text-align: right;
+  letter-spacing: 0.5px;
+}
+
+.map-progress-track {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+}
+
+.map-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #00b4d8 0%, var(--cyan-bright) 100%);
+  border-radius: 6px;
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.6);
+}
+
 /* Retícula Central en Primera Persona */
 .reticle-container {
   position: absolute;

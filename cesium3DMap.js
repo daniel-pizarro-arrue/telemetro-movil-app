@@ -499,8 +499,6 @@
             if (this.onHeightChanged) {
               this.onHeightChanged(this.postureHeight, totalCamAlt);
             }
-            // Iniciar precarga de radio 5km en segundo plano automáticamente
-            this.preloadRadius5km(this.userLat, this.userLng);
             resolve();
           }
         });
@@ -508,49 +506,74 @@
     }
 
     /**
-     * Descarga y precarga en segundo plano la totalidad de la malla 3D en un radio de 5 kilómetros
+     * Descarga y precarga la totalidad de la malla 3D en un radio de 5 kilómetros
+     * Invoca onProgress(porcentaje, textoDetalle) por cada lote descargado
+     * Devuelve una Promesa que resuelve al completar el 100% de la descarga
      */
-    preloadRadius5km(lat, lng) {
-      if (!this.viewer || !this.viewer.scene) return;
+    async preloadRadius5km(lat, lng, onProgress = null) {
+      if (!this.viewer || !this.viewer.scene) {
+        if (onProgress) onProgress(100, 'Descarga completada');
+        return;
+      }
       const Cesium = (typeof window !== 'undefined' && window.Cesium) ? window.Cesium : (typeof globalThis !== 'undefined' ? globalThis.Cesium : null);
       const GeoMath = (typeof window !== 'undefined' && window.GeoMath) ? window.GeoMath : (typeof require === 'function' ? require('./geoMath.js') : null);
-      if (!Cesium || !Cesium.Cartographic) return;
+      if (!Cesium || !Cesium.Cartographic) {
+        if (onProgress) onProgress(100, 'Descarga completada');
+        return;
+      }
 
-      // Anillos concéntricos de muestreo denso hasta 5.000m
-      const rings = [
-        { dist: 400, count: 8 },
-        { dist: 1000, count: 8 },
-        { dist: 2000, count: 12 },
-        { dist: 3500, count: 16 },
-        { dist: 5000, count: 20 }
+      const ringBatches = [
+        { label: 'Núcleo central (0 - 500m)', dist: 400, count: 8, targetPct: 20 },
+        { label: 'Sector cercano (1.000m)', dist: 1000, count: 8, targetPct: 40 },
+        { label: 'Sector medio (2.000m)', dist: 2000, count: 12, targetPct: 65 },
+        { label: 'Sector lejano (3.500m)', dist: 3500, count: 16, targetPct: 85 },
+        { label: 'Perímetro táctico (5.000m)', dist: 5000, count: 20, targetPct: 100 }
       ];
 
-      const cartos = [Cesium.Cartographic.fromDegrees(lng, lat)];
-      if (GeoMath?.destinationPoint) {
-        for (const ring of rings) {
-          const step = 360 / ring.count;
+      if (onProgress) onProgress(5, 'Iniciando descarga de geometría 3D...');
+
+      // Punto central
+      try {
+        const centerCarto = [Cesium.Cartographic.fromDegrees(lng, lat)];
+        if (this.viewer?.scene?.sampleHeightMostDetailed) {
+          await this.viewer.scene.sampleHeightMostDetailed(centerCarto);
+        }
+      } catch (_) {}
+
+      for (let i = 0; i < ringBatches.length; i++) {
+        const batch = ringBatches[i];
+        const cartos = [];
+        if (GeoMath?.destinationPoint) {
+          const step = 360 / batch.count;
           for (let b = 0; b < 360; b += step) {
-            const dest = GeoMath.destinationPoint(lat, lng, ring.dist, b);
+            const dest = GeoMath.destinationPoint(lat, lng, batch.dist, b);
             cartos.push(Cesium.Cartographic.fromDegrees(dest.lon, dest.lat));
           }
         }
-      }
 
-      console.log(`[Cesium3DMap] Precargando ${cartos.length} sectores 3D en radio de 5km...`);
+        if (onProgress) {
+          onProgress(batch.targetPct - 5, `Descargando ${batch.label}...`);
+        }
 
-      // Ejecutar de forma no bloqueante en segundo plano
-      setTimeout(async () => {
         try {
-          this._notifyStatus('📥 Descargando mapa 3D (radio 5 km)...');
-          if (this.viewer?.scene?.sampleHeightMostDetailed) {
+          if (this.viewer?.scene?.sampleHeightMostDetailed && cartos.length > 0) {
             await this.viewer.scene.sampleHeightMostDetailed(cartos);
           }
-          console.log('[Cesium3DMap] Precarga de radio 5km completada.');
-          this._notifyStatus('✅ Malla 3D (5 km) precargada en memoria');
         } catch (err) {
-          console.warn('[Cesium3DMap] Precarga 5km parcial:', err);
+          console.warn(`[Cesium3DMap] Sector ${batch.label} cargado parcialmente:`, err);
         }
-      }, 500);
+
+        if (onProgress) {
+          onProgress(batch.targetPct, `${batch.label} descargado`);
+        }
+        // Pausa breve entre lotes para dar respiro al renderizador
+        await new Promise((r) => setTimeout(r, 60));
+      }
+
+      if (onProgress) {
+        onProgress(100, 'Mapa 3D y texturas descargadas al 100%');
+      }
+      this._notifyStatus('✅ Malla 3D (5 km) precargada en memoria');
     }
 
     /**

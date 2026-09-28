@@ -24,6 +24,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   const locationConfirmCard = document.getElementById('locationConfirmCard');
   const btnConfirmLocation = document.getElementById('btnConfirmLocation');
 
+  const mapProgressOverlay = document.getElementById('mapProgressOverlay');
+  const mapProgressFill = document.getElementById('mapProgressFill');
+  const mapProgressPct = document.getElementById('mapProgressPct');
+  const mapProgressSub = document.getElementById('mapProgressSub');
+
   const postureBtn = document.getElementById('postureBtn');
   const postureIcon = document.getElementById('postureIcon');
   const modeToggleBtn = document.getElementById('modeToggleBtn');
@@ -48,6 +53,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     toastTimer = setTimeout(() => {
       statusToast.classList.remove('visible');
     }, duration);
+  }
+
+  function updateMapProgress(percent, subtitle) {
+    if (mapProgressOverlay) mapProgressOverlay.classList.remove('hidden');
+    if (mapProgressFill) mapProgressFill.style.width = `${Math.min(100, Math.max(0, percent))}%`;
+    if (mapProgressPct) mapProgressPct.textContent = `${Math.round(percent)}%`;
+    if (mapProgressSub && subtitle) mapProgressSub.textContent = subtitle;
+  }
+
+  function hideMapProgress() {
+    if (mapProgressOverlay) {
+      mapProgressOverlay.classList.add('hidden');
+    }
   }
 
   function updateGpsUI(status, customLabel) {
@@ -228,11 +246,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (centerLocationPin) centerLocationPin.classList.add('hidden');
     if (btnConfirmLocation) btnConfirmLocation.classList.add('hidden');
 
-    // Descenso cinemático suave a la cota real del suelo mirando al horizonte
+    // 1. Mostrar barra de progreso de descarga del mapa y texturas en vista aérea
+    updateMapProgress(5, 'Iniciando descarga de geometría y texturas (5 km)...');
+
+    // 2. Esperar a que se descargue completamente la malla 3D y texturas en radio de 5km
+    await cesiumMap.preloadRadius5km(centerCoords.lat, centerCoords.lng, (percent, label) => {
+      updateMapProgress(percent, label);
+    });
+
+    // Pequeña pausa visual al alcanzar el 100%
+    await new Promise((r) => setTimeout(r, 350));
+
+    // 3. Ocultar la barra de progreso una vez terminada la descarga
+    hideMapProgress();
+
+    // 4. AHORA SÍ: Descenso cinemático inmersivo a la cota real del suelo mirando al horizonte
     const currentPosture = POSTURES[currentPostureIndex];
     await cesiumMap.descendToGround(centerCoords.lat, centerCoords.lng, centerCoords.alt, currentPosture.height);
 
-    // Activar elementos de primera persona
+    // 5. Activar elementos de primera persona
     compassRibbon.classList.remove('hidden');
     postureBtn.classList.remove('hidden');
     modeToggleBtn.classList.remove('hidden');
@@ -240,9 +272,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     reticleContainer.classList.remove('hidden');
     bottomActions.classList.remove('hidden');
 
-    // Nota: El cuadro de información central se mantiene oculto por el momento según instrucción
-
-    showToast('Posición fijada. Ajusta postura o activa la brújula.', 3500);
+    showToast('Entorno 3D listo. Posición confirmada.', 3500);
   });
 
   // ─── 4. BOTÓN DE POSTURA (DE PIE / ARRODILLADO / TENDIDO) ─────────────────

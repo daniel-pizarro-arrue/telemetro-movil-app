@@ -133,10 +133,16 @@ assert.strictEqual(mapCtrl.postureHeight, 0.05, 'Debe clamplear a min 0.05m');
 mapCtrl.setCustomHeight(2.4);
 assert.strictEqual(mapCtrl.postureHeight, 2.4);
 
-// Test preloadRadius5km method exists and runs without throw
+// Test preloadRadius5km method exists and reports progress
 assert.strictEqual(typeof mapCtrl.preloadRadius5km, 'function');
-mapCtrl.preloadRadius5km(-33.45, -70.67);
-
-console.log('✅ TODOS LOS TESTS PASARON EXITOSAMENTE');
+let progressReported = false;
+mapCtrl.preloadRadius5km(-33.45, -70.67, (pct, label) => {
+  progressReported = true;
+  assert(pct >= 0 && pct <= 100);
+}).then(() => {
+  assert.strictEqual(progressReported, true);
+  console.log('Test Preload 5km: Progreso reportado correctamente');
+  console.log('✅ TODOS LOS TESTS PASARON EXITOSAMENTE');
+});
 
 
