@@ -45,6 +45,7 @@
 
       // Capa de edificios y estructuras 3D (activado por defecto)
       this.showBuildings = true;
+      this._terrainImageryLayer = null; // Capa satelital ESRI usada cuando los edificios están ocultos
 
       this.onTargetMeasured = null;
       this.onStatusChange = null;
@@ -686,26 +687,54 @@
 
     /**
      * Alterna la visibilidad de los edificios y estructuras 3D (Google Photorealistic 3D Tiles).
-     * Cuando están desactivados, se activa el globo de terreno de Cesium como fallback topográfico.
+     * - Edificios ON : muestra Google 3D Tiles fotorrealistas, oculta el globo.
+     * - Edificios OFF: oculta Google 3D Tiles, activa el globo Cesium con terrain real
+     *   más una capa de imágenes satelitales ESRI de alta resolución (sin API key).
      */
     toggleBuildings(show) {
       this.showBuildings = (typeof show === 'boolean') ? show : !this.showBuildings;
+      const Cesium = window.Cesium;
       const scene = this.viewer?.scene;
-      if (!scene) return this.showBuildings;
+      if (!scene || !Cesium) return this.showBuildings;
 
       // Mostrar/ocultar el tileset fotorrealista de Google
       if (this.tileset) {
         this.tileset.show = this.showBuildings;
       }
 
-      // Cuando se desactivan los edificios 3D, mostrar el globo de terreno como superficie de referencia
-      if (scene.globe) {
-        scene.globe.show = !this.showBuildings;
+      if (this.showBuildings) {
+        // ── MODO FOTORREALISTA: ocultar globo y eliminar capa satelital de respaldo ──
+        if (scene.globe) scene.globe.show = false;
+        if (this._terrainImageryLayer) {
+          this.viewer.imageryLayers.remove(this._terrainImageryLayer, true);
+          this._terrainImageryLayer = null;
+        }
+      } else {
+        // ── MODO TOPOGRAFÍA: globo Cesium + imágenes satelitales ESRI (sin edificios) ──
+        if (scene.globe) {
+          scene.globe.show = true;
+          scene.globe.depthTestAgainstTerrain = true;
+        }
+
+        // Añadir la capa de imágenes satelitales ESRI si todavía no existe
+        if (!this._terrainImageryLayer) {
+          try {
+            // ESRI World Imagery: satélite de alta resolución, público y sin API key
+            const imageryProvider = new Cesium.UrlTemplateImageryProvider({
+              url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+              maximumLevel: 19,
+              credit: 'Tiles © Esri - Source: Esri, Maxar, GeoEye'
+            });
+            this._terrainImageryLayer = this.viewer.imageryLayers.addImageryProvider(imageryProvider);
+          } catch (e) {
+            console.warn('[Cesium3DMap] No se pudo cargar imagen satelital ESRI:', e);
+          }
+        }
       }
 
       this._notifyStatus(this.showBuildings
-        ? '🏙️ Edificios 3D activados'
-        : '🗺️ Edificios 3D desactivados (solo topografía)');
+        ? '🏙️ Vista fotorrealista 3D activada'
+        : '🗺️ Modo topografía satelital (sin edificios)');
 
       return this.showBuildings;
     }
