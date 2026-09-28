@@ -18,9 +18,11 @@
 
   // Constantes Geodésicas
   const METERS_PER_DEG_LAT = 111139.0;
-  const TILE_ZOOM = 12; // Zoom 12: ~7.6 km x 7.6 km por tile, resolución óptima (~30m)
+  const TILE_ZOOM = 12; // Zoom 12 para DEM de elevación (~30m por píxel)
+  const SAT_ZOOM = 15; // Zoom 15 para textura satelital: ~4.8m/px, fotorrealista HD
+  const SAT_GRID = 5;  // 5x5 tiles satelitales = 1280x1280 px (alta definición)
   const TERRAIN_SIZE_METERS = 18000; // 18 km x 18 km alrededor del observador
-  const MESH_SEGMENTS = 120; // 120x120 = 14,400 vértices para 60 FPS fluidos en móvil
+  const MESH_SEGMENTS = 256; // 256x256 = 66,049 vértices. Relieve detallado con cadencia aceptable
 
   // Estado del Motor 3D
   let scene = null;
@@ -212,7 +214,7 @@
     });
   }
 
-  // Muestrea la cota exacta para cualquier (lat, lon) usando las tiles en memoria
+  // Muestrea la cota con interpolación bilineal para cualquier (lat, lon)
   function sampleElevationFromTiles(lat, lon, zoom = TILE_ZOOM) {
     const frac = latLonToTileFraction(lat, lon, zoom);
     const tileX = Math.floor(frac.x);
@@ -222,10 +224,28 @@
     const tileData = tileElevationCache.get(key);
     if (!tileData) return null;
 
-    const px = Math.min(255, Math.max(0, Math.floor((frac.x - tileX) * 256.0)));
-    const py = Math.min(255, Math.max(0, Math.floor((frac.y - tileY) * 256.0)));
-    const idx = py * 256 + px;
-    return tileData[idx];
+    // Posición sub-píxel continua dentro del tile (0..255.999)
+    const fpx = (frac.x - tileX) * 256.0;
+    const fpy = (frac.y - tileY) * 256.0;
+
+    const px0 = Math.min(254, Math.max(0, Math.floor(fpx)));
+    const py0 = Math.min(254, Math.max(0, Math.floor(fpy)));
+    const px1 = px0 + 1;
+    const py1 = py0 + 1;
+
+    // Pesos de interpolación bilineal
+    const fx = fpx - px0;
+    const fy = fpy - py0;
+
+    const z00 = tileData[py0 * 256 + px0];
+    const z10 = tileData[py0 * 256 + px1];
+    const z01 = tileData[py1 * 256 + px0];
+    const z11 = tileData[py1 * 256 + px1];
+
+    // Interpolación bilineal: suaviza la transición entre celdas DEM
+    const top = z00 * (1.0 - fx) + z10 * fx;
+    const bot = z01 * (1.0 - fx) + z11 * fx;
+    return top * (1.0 - fy) + bot * fy;
   }
 
   // ==========================================================
@@ -291,7 +311,7 @@
     isMeshLoading = true;
 
     try {
-      // 1. Determinar cuadrícula 3x3 de tiles requeridas
+      // ──── 1. TILES DE ELEVACIÓN (DEM) — Cuadrícula 3×3 a TILE_ZOOM (zoom 12) ────
       const centerFrac = latLonToTileFraction(obsLat, obsLon, TILE_ZOOM);
       const centerTileX = Math.floor(centerFrac.x);
       const centerTileY = Math.floor(centerFrac.y);
@@ -301,20 +321,39 @@
       const minTileY = centerTileY - 1;
       const maxTileY = centerTileY + 2; // exclusivo
 
-      // Esquinas geodésicas extremas del bloque 3x3 para proyección UV exacta
-      const nw = tileToLatLon(minTileX, minTileY, TILE_ZOOM);
-      const se = tileToLatLon(maxTileX, maxTileY, TILE_ZOOM);
+      // Esquinas geodésicas extremas del bloque 3×3 DEM para UV fallback
+      const nwDem = tileToLatLon(minTileX, minTileY, TILE_ZOOM);
+      const seDem = tileToLatLon(maxTileX, maxTileY, TILE_ZOOM);
 
       const tilePromises = [];
-      const satPromises = [];
       for (let dy = -1; dy <= 1; dy++) {
         for (let dx = -1; dx <= 1; dx++) {
-          const tx = centerTileX + dx;
-          const ty = centerTileY + dy;
-          tilePromises.push(loadTileElevation(TILE_ZOOM, tx, ty));
-          satPromises.push(loadTileSatelliteImage(TILE_ZOOM, tx, ty));
+          tilePromises.push(loadTileElevation(TILE_ZOOM, centerTileX + dx, centerTileY + dy));
         }
       }
+
+      // ──── 2. TILES SATELITALES HD — Cuadrícula SAT_GRID×SAT_GRID a SAT_ZOOM ────
+      const satCenterFrac = latLonToTileFraction(obsLat, obsLon, SAT_ZOOM);
+      const satCenterTX = Math.floor(satCenterFrac.x);
+      const satCenterTY = Math.floor(satCenterFrac.y);
+      const satHalf = Math.floor(SAT_GRID / 2); // 2 para grid 5×5
+
+      const satMinTX = satCenterTX - satHalf;
+      const satMinTY = satCenterTY - satHalf;
+      const satMaxTX = satMinTX + SAT_GRID; // exclusivo
+      const satMaxTY = satMinTY + SAT_GRID; // exclusivo
+
+      // Esquinas geodésicas del bloque satelital para proyección UV exacta
+      const nwSat = tileToLatLon(satMinTX, satMinTY, SAT_ZOOM);
+      const seSat = tileToLatLon(satMaxTX, satMaxTY, SAT_ZOOM);
+
+      const satPromises = [];
+      for (let ty = satMinTY; ty < satMaxTY; ty++) {
+        for (let tx = satMinTX; tx < satMaxTX; tx++) {
+          satPromises.push(loadTileSatelliteImage(SAT_ZOOM, tx, ty));
+        }
+      }
+
       const [elevResults, satImages] = await Promise.all([
         Promise.all(tilePromises),
         Promise.all(satPromises)
@@ -327,21 +366,22 @@
         observer.groundAlt = sampledCenterAlt;
       }
 
-      // 2. Componer la textura satelital 3x3 (768x768)
+      // ──── 3. TEXTURA SATELITAL HD (SAT_GRID × 256 px) ────
       if (typeof document !== 'undefined') {
         try {
+          const texSize = SAT_GRID * 256; // 5×256 = 1280 px
           const satCanvas = document.createElement('canvas');
-          satCanvas.width = 3 * 256;
-          satCanvas.height = 3 * 256;
+          satCanvas.width = texSize;
+          satCanvas.height = texSize;
           const satCtx = satCanvas.getContext('2d');
 
           // Fondo neutro tierra/montaña
-          satCtx.fillStyle = '#223028';
-          satCtx.fillRect(0, 0, satCanvas.width, satCanvas.height);
+          satCtx.fillStyle = '#1a2520';
+          satCtx.fillRect(0, 0, texSize, texSize);
 
           let satIdx = 0;
-          for (let dy = 0; dy < 3; dy++) {
-            for (let dx = 0; dx < 3; dx++) {
+          for (let dy = 0; dy < SAT_GRID; dy++) {
+            for (let dx = 0; dx < SAT_GRID; dx++) {
               const img = satImages[satIdx++];
               if (img) {
                 satCtx.drawImage(img, dx * 256, dy * 256, 256, 256);
@@ -353,16 +393,22 @@
             satelliteTexture.dispose();
           }
           satelliteTexture = new THREE.CanvasTexture(satCanvas);
-          satelliteTexture.minFilter = THREE.LinearFilter;
+          // Mipmaps + Filtrado anisotrópico para textura nítida incluso en ángulos oblicuos
+          satelliteTexture.generateMipmaps = true;
+          satelliteTexture.minFilter = THREE.LinearMipmapLinearFilter;
           satelliteTexture.magFilter = THREE.LinearFilter;
           satelliteTexture.wrapS = THREE.ClampToEdgeWrapping;
           satelliteTexture.wrapT = THREE.ClampToEdgeWrapping;
+          // Anisotropía máxima disponible en el GPU del dispositivo
+          if (renderer) {
+            satelliteTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+          }
         } catch (texErr) {
-          console.warn('Error componiendo textura satelital:', texErr);
+          console.warn('Error componiendo textura satelital HD:', texErr);
         }
       }
 
-      // 3. Crear Geometría de Plano (XZ)
+      // ──── 4. GEOMETRÍA DEL TERRENO (PlaneGeometry en XZ) ────
       const geometry = new THREE.PlaneGeometry(
         TERRAIN_SIZE_METERS,
         TERRAIN_SIZE_METERS,
@@ -386,8 +432,7 @@
         let vertexAlt = sampleElevationFromTiles(geo.lat, geo.lon);
 
         if (vertexAlt === null) {
-          // Si la tile aún no cargó o está fuera de rango, interpolación suave
-          const dist = Math.sqrt(vx * vx + vz * vz);
+          // Si la tile aún no cargó o está fuera de rango, elevación procedural suave
           vertexAlt = obsAlt + Math.sin(vx / 1200.0) * 150.0 + Math.cos(vz / 1200.0) * 150.0;
         }
 
@@ -395,9 +440,9 @@
         const relY = vertexAlt - obsAlt;
         posAttr.setY(i, relY);
 
-        // Mapeo UV geodésico exacto a la fotografía satelital de 3x3 tiles
-        const u = (geo.lon - nw.lon) / (se.lon - nw.lon);
-        const v = (geo.lat - se.lat) / (nw.lat - se.lat);
+        // ── Mapeo UV geodésico a la textura satelital HD (SAT_ZOOM) ──
+        const u = (geo.lon - nwSat.lon) / (seSat.lon - nwSat.lon);
+        const v = (geo.lat - seSat.lat) / (nwSat.lat - seSat.lat);
         uvAttr.setXY(i, Math.max(0.0, Math.min(1.0, u)), Math.max(0.0, Math.min(1.0, v)));
 
         // Color hipsométrico de respaldo para modo topográfico
@@ -410,38 +455,45 @@
       geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
       geometry.computeVertexNormals();
 
-      // 4. Crear o reemplazar la malla del terreno
+      // ──── 5. MATERIAL PBR FOTORREALISTA ────
       if (terrainMesh) {
         scene.remove(terrainMesh);
         terrainMesh.geometry.dispose();
+        if (terrainMesh.material) terrainMesh.material.dispose();
       }
 
       const useSat = currentVisualMode === 'satellite' && satelliteTexture !== null;
-      const terrainMaterial = new THREE.MeshLambertMaterial({
+      const terrainMaterial = new THREE.MeshStandardMaterial({
         map: useSat ? satelliteTexture : null,
         vertexColors: !useSat,
         transparent: true,
         opacity: currentOpacity,
         wireframe: false,
         depthWrite: true,
-        side: THREE.DoubleSide
+        side: THREE.DoubleSide,
+        roughness: 0.88,   // Terreno natural: superficie mate y rugosa
+        metalness: 0.02,   // Casi nada metálico
+        flatShading: false, // Sombreado suave interpolado entre vértices
+        envMapIntensity: 0.3
       });
 
       terrainMesh = new THREE.Mesh(geometry, terrainMaterial);
       terrainMesh.name = 'TerrainSolidMesh';
+      terrainMesh.receiveShadow = true;
       scene.add(terrainMesh);
 
-      // 5. Crear o reemplazar la malla de contorno wireframe (para silueta)
+      // ──── 6. WIREFRAME TÁCTICO (OPCIONAL) ────
       if (wireframeMesh) {
         scene.remove(wireframeMesh);
         wireframeMesh.geometry.dispose();
+        if (wireframeMesh.material) wireframeMesh.material.dispose();
       }
 
       const wireframeMaterial = new THREE.MeshBasicMaterial({
         color: 0x00f2fe, // Cyan táctico para silueta de crestas
         wireframe: true,
         transparent: true,
-        opacity: Math.min(1.0, currentOpacity * 0.40) // Más sutil para destacar la foto satelital
+        opacity: Math.min(1.0, currentOpacity * 0.30)
       });
 
       wireframeMesh = new THREE.Mesh(geometry, wireframeMaterial);
@@ -450,7 +502,7 @@
       scene.add(wireframeMesh);
 
       lastLoadedCoords = { lat: obsLat, lon: obsLon };
-      console.log('Malla 3D Fotorrealista generada:', count, 'vértices | Modo:', currentVisualMode);
+      console.log('Malla 3D HD generada:', count, 'vértices | Textura:', texSize || 'N/A', 'px | Modo:', currentVisualMode);
     } catch (e) {
       console.error('Error generando malla de terreno 3D:', e);
     } finally {
@@ -538,24 +590,31 @@
 
     // 1. Escena
     scene = new THREE.Scene();
-    // Niebla táctica de distancia: funde montañas lejanas a 18 km suavemente
-    scene.fog = new THREE.FogExp2(0x05070a, 0.00012);
+    // Niebla atmosférica exponencial: disipa gradualmente el terreno lejano
+    scene.fog = new THREE.FogExp2(0x8cb4d4, 0.00008); // Azul cielo/neblina de montaña
 
     // 2. Cámara de Perspectiva
     const aspect = canvas.clientWidth > 0 ? (canvas.clientWidth / canvas.clientHeight) : (window.innerWidth / window.innerHeight);
-    camera = new THREE.PerspectiveCamera(currentFov, aspect, 1.0, 35000.0);
+    camera = new THREE.PerspectiveCamera(currentFov, aspect, 1.0, 40000.0);
     camera.rotation.order = 'YXZ'; // Clave: rotación yaw (azimut) -> pitch -> roll
     camera.position.set(0, observer.eyeHeight, 0); // A la altura de los ojos del observador
     scene.add(camera);
 
-    // 3. Iluminación Topográfica Realista (Hillshading)
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.55);
-    scene.add(ambientLight);
+    // 3. Iluminación Realista PBR (Hillshading de alta calidad)
+    // Luz hemisférica: cielo azul arriba, tierra oscura abajo → iluminación ambiental natural
+    const hemiLight = new THREE.HemisphereLight(0x87ceeb, 0x3a5f0b, 0.65);
+    scene.add(hemiLight);
 
-    // Luz solar dirigida para marcar sombras y relieves en faldas de cerros
-    const sunLight = new THREE.DirectionalLight(0xfff5e6, 0.85);
-    sunLight.position.set(5000, 7000, 3000);
+    // Luz solar directa intensa para marcar sombras, crestas y relieves 3D
+    const sunLight = new THREE.DirectionalLight(0xfff8e8, 1.2);
+    sunLight.position.set(4000, 8000, 5000);
+    sunLight.castShadow = false; // Sombras dinámicas desactivadas por rendimiento móvil
     scene.add(sunLight);
+
+    // Contraluz sutil para que las caras en sombra no sean completamente negras
+    const fillLight = new THREE.DirectionalLight(0xb0d4f1, 0.35);
+    fillLight.position.set(-3000, 4000, -4000);
+    scene.add(fillLight);
 
     // 4. Baliza táctica
     targetBeacon = createTargetBeacon();
