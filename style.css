@@ -222,7 +222,7 @@ html, body {
   fill: var(--cyan-bright);
 }
 
-/* 📍 PIN CENTRAL DE AJUSTE DE UBICACIÓN */
+/* 📍 PIN CENTRAL DE AJUSTE DE UBICACIÓN (FINO, PEQUEÑO Y DISCRETO) */
 .center-location-pin {
   position: absolute;
   top: 50%;
@@ -236,96 +236,71 @@ html, body {
 }
 
 .pin-head {
-  width: 28px;
-  height: 28px;
-  background: radial-gradient(circle at 35% 35%, #00f0ff 0%, #0284c7 70%);
-  border: 2px solid #ffffff;
+  width: 10px;
+  height: 10px;
+  background: var(--cyan-bright);
+  border: 1.5px solid #ffffff;
   border-radius: 50%;
-  box-shadow: 0 0 16px rgba(0, 240, 255, 0.8);
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.7);
 }
 
 .pin-point {
   width: 0;
   height: 0;
-  border-left: 7px solid transparent;
-  border-right: 7px solid transparent;
-  border-top: 14px solid #0284c7;
-  margin-top: -3px;
+  border-left: 2.5px solid transparent;
+  border-right: 2.5px solid transparent;
+  border-top: 5px solid var(--cyan-bright);
+  margin-top: -1px;
 }
 
 .pin-ring-pulse {
   position: absolute;
-  bottom: -4px;
-  width: 20px;
-  height: 10px;
-  border: 2px solid var(--cyan-bright);
+  bottom: -2px;
+  width: 8px;
+  height: 4px;
+  border: 1px solid var(--cyan-bright);
   border-radius: 50%;
   animation: pulse-pin-ring 1.8s infinite ease-out;
 }
 
 @keyframes pulse-pin-ring {
-  0% { transform: scale(0.5); opacity: 1; }
-  100% { transform: scale(3.5); opacity: 0; }
+  0% { transform: scale(0.6); opacity: 1; }
+  100% { transform: scale(2.8); opacity: 0; }
 }
 
-/* TARJETA DE CONFIRMACIÓN DE UBICACIÓN (FASE AÉREA) */
-.location-confirm-card {
+/* BOTÓN CONFIRMAR SIMPLE (FASE AÉREA) */
+.btn-confirm-simple {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
   pointer-events: auto;
-  align-self: center;
-  margin: 0 16px 24px 16px;
-  max-width: 440px;
-  width: calc(100% - 32px);
-  background: var(--bg-surface);
-  border: 1px solid var(--cyan-bright);
-  border-radius: 12px;
-  padding: 16px;
-  backdrop-filter: blur(12px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.75), 0 0 20px rgba(0, 240, 255, 0.2);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  text-align: center;
-  animation: slide-up 0.4s ease-out;
-}
-
-@keyframes slide-up {
-  from { transform: translateY(30px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
-}
-
-.confirm-title {
-  font-size: 13px;
-  font-weight: 800;
-  color: var(--cyan-bright);
-  letter-spacing: 0.8px;
-}
-
-.confirm-desc {
-  font-size: 11px;
-  color: var(--text-muted);
-  line-height: 1.4;
-  margin-top: 4px;
-}
-
-.btn-confirm-pos {
-  background: linear-gradient(135deg, rgba(0, 240, 255, 0.3) 0%, rgba(2, 132, 199, 0.55) 100%);
+  z-index: 20;
+  background: rgba(10, 16, 26, 0.92);
   border: 1px solid var(--cyan-bright);
   color: #ffffff;
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 800;
-  letter-spacing: 0.5px;
-  padding: 14px;
-  border-radius: 8px;
+  letter-spacing: 1.5px;
+  padding: 11px 32px;
+  border-radius: 24px;
   cursor: pointer;
-  box-shadow: 0 0 16px rgba(0, 240, 255, 0.4);
-  transition: all 0.15s ease;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.75), 0 0 14px rgba(0, 240, 255, 0.35);
+  backdrop-filter: blur(10px);
+  transition: all 0.2s ease;
+  animation: slide-up 0.35s ease-out;
 }
 
-.btn-confirm-pos:active {
-  transform: scale(0.96);
+.btn-confirm-simple:active {
+  transform: translateX(-50%) scale(0.95);
   background: var(--cyan-bright);
   color: #030712;
+}
+
+@keyframes slide-up {
+  from { transform: translate(-50%, 20px); opacity: 0; }
+  to { transform: translate(-50%, 0); opacity: 1; }
 }
 
 /* Retícula Central en Primera Persona */

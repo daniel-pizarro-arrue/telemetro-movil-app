@@ -179,9 +179,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     hasConfirmedLocation = true;
 
-    // Ocultar pin central y tarjeta de confirmación
-    centerLocationPin.classList.add('hidden');
-    locationConfirmCard.classList.add('hidden');
+    // Ocultar pin central y botón de confirmación
+    if (centerLocationPin) centerLocationPin.classList.add('hidden');
+    if (btnConfirmLocation) btnConfirmLocation.classList.add('hidden');
 
     // Descenso cinemático suave mirando al horizonte
     const currentPosture = POSTURES[currentPostureIndex];
