@@ -692,3 +692,145 @@ html, body {
   color: var(--text-muted);
   border-color: rgba(255, 255, 255, 0.2);
 }
+
+/* ⚙️ PANEL DE CONFIGURACIÓN */
+.config-panel {
+  position: absolute;
+  top: 62px;
+  right: 14px;
+  width: 280px;
+  background: rgba(10, 16, 26, 0.96);
+  border: 1px solid var(--border-glow);
+  border-radius: 16px;
+  backdrop-filter: blur(16px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8), 0 0 20px rgba(0, 240, 255, 0.12);
+  z-index: 60;
+  pointer-events: auto;
+  animation: panel-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+.config-panel.hidden {
+  display: none !important;
+}
+
+@keyframes panel-in {
+  from { opacity: 0; transform: translateY(-8px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.config-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px 10px 16px;
+  border-bottom: 1px solid rgba(0, 240, 255, 0.12);
+}
+
+.config-panel-title {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.config-close-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.config-close-btn:active {
+  transform: scale(0.9);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.config-panel-body {
+  padding: 10px 0;
+}
+
+.config-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  gap: 12px;
+  transition: background 0.15s ease;
+}
+
+.config-row:active {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.config-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.config-row-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-main);
+  letter-spacing: 0.2px;
+}
+
+.config-row-desc {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0.1px;
+  line-height: 1.4;
+}
+
+/* Interruptor tipo iOS */
+.config-toggle {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  border-radius: 13px;
+  border: none;
+  background: rgba(255, 255, 255, 0.15);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.25s ease, box-shadow 0.25s ease;
+  padding: 0;
+}
+
+.config-toggle.active {
+  background: var(--cyan-bright);
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
+}
+
+.config-toggle-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  display: block;
+}
+
+.config-toggle.active .config-toggle-knob {
+  transform: translateX(18px);
+}
+
+/* Fix pointer-events en height-stepper-widget */
+.height-stepper-widget {
+  pointer-events: auto;
+}

@@ -39,6 +39,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnMeasure = document.getElementById('btnMeasure');
   const btnClear = document.getElementById('btnClear');
 
+  const configBtn = document.getElementById('configBtn');
+  const configPanel = document.getElementById('configPanel');
+  const configPanelClose = document.getElementById('configPanelClose');
+  const toggleBuildingsBtn = document.getElementById('toggleBuildingsBtn');
+
   const resDirectDist = document.getElementById('resDirectDist');
   const resDeltaH = document.getElementById('resDeltaH');
   const resBearing = document.getElementById('resBearing');
@@ -268,6 +273,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     compassRibbon.classList.remove('hidden');
     postureBtn.classList.remove('hidden');
     modeToggleBtn.classList.remove('hidden');
+    if (configBtn) configBtn.classList.remove('hidden');
     if (heightControlWidget) heightControlWidget.classList.remove('hidden');
     reticleContainer.classList.remove('hidden');
     bottomActions.classList.remove('hidden');
@@ -308,6 +314,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function bindButton(btn, delta) {
       btn.addEventListener('pointerdown', (e) => {
         e.preventDefault();
+        e.stopPropagation(); // Evitar que el evento llegue al canvas de Cesium
         step(delta);
         clearInterval(holdInterval);
         holdInterval = setInterval(() => {
@@ -315,7 +322,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         }, 80);
       });
 
-      const stopHold = () => {
+      const stopHold = (e) => {
+        e && e.stopPropagation && e.stopPropagation();
         clearInterval(holdInterval);
       };
 
@@ -329,6 +337,62 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   setupHeightStepper();
+
+  // ─── 4.2. BOTÓN DE CONFIGURACIÓN Y PANEL ─────────────────────────────────
+  let configPanelOpen = false;
+
+  function openConfigPanel() {
+    if (!configPanel) return;
+    configPanelOpen = true;
+    configPanel.classList.remove('hidden');
+  }
+
+  function closeConfigPanel() {
+    if (!configPanel) return;
+    configPanelOpen = false;
+    configPanel.classList.add('hidden');
+  }
+
+  if (configBtn) {
+    configBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (configPanelOpen) {
+        closeConfigPanel();
+      } else {
+        openConfigPanel();
+      }
+    });
+  }
+
+  if (configPanelClose) {
+    configPanelClose.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeConfigPanel();
+    });
+  }
+
+  // Cerrar el panel al tocar fuera de él
+  document.addEventListener('pointerdown', (e) => {
+    if (!configPanelOpen) return;
+    if (configPanel && !configPanel.contains(e.target) && e.target !== configBtn) {
+      closeConfigPanel();
+    }
+  });
+
+  // Toggle de Edificios y Estructuras 3D
+  let buildingsVisible = true;
+  if (toggleBuildingsBtn) {
+    toggleBuildingsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!cesiumMap) return;
+      buildingsVisible = cesiumMap.toggleBuildings(!buildingsVisible);
+      if (buildingsVisible) {
+        toggleBuildingsBtn.classList.add('active');
+      } else {
+        toggleBuildingsBtn.classList.remove('active');
+      }
+    });
+  }
 
   // ─── 5. BOTÓN DE BRÚJULA (ACTIVADA / DESACTIVADA) ─────────────────────────
   modeToggleBtn.addEventListener('click', async () => {

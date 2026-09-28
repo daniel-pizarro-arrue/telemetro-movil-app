@@ -43,6 +43,9 @@
       // Óptica y zoom (FOV en grados: 60° = 1.0x, 6° = 10.0x)
       this.currentFov = 60.0;
 
+      // Capa de edificios y estructuras 3D (activado por defecto)
+      this.showBuildings = true;
+
       this.onTargetMeasured = null;
       this.onStatusChange = null;
       this.onOrientationChanged = null; // (heading, pitch) => {}
@@ -63,7 +66,7 @@
         : this.containerId;
 
       this.viewer = new Cesium.Viewer(container, {
-        globe: false,
+        globe: true,
         baseLayer: false,
         skyBox: false,
         skyAtmosphere: false,
@@ -90,6 +93,12 @@
       const scene = this.viewer.scene;
       scene.backgroundColor = Cesium.Color.fromCssColorString('#020617');
 
+      // Si el globo está presente, lo mantenemos oculto mientras las 3D Tiles estén activas
+      if (scene.globe) {
+        scene.globe.show = false;
+        scene.globe.depthTestAgainstTerrain = true;
+      }
+
       // Desactivar detección de colisiones de Cesium para evitar que la cámara se teletransporte hacia arriba al rotar
       if (scene.screenSpaceCameraController) {
         scene.screenSpaceCameraController.enableCollisionDetection = false;
@@ -112,6 +121,10 @@
           return false;
         };
       }
+
+      // Cargar capa secundaria de relieve/terreno en segundo plano para cuando se desactiven los edificios 3D
+      this._setupTerrainProvider();
+      this.showBuildings = true;
 
       try {
         if (Cesium.GoogleMaps) {
@@ -190,10 +203,14 @@
       let touchStartTime = 0;
       let startPinchDist = 0;
       let startFovOnPinch = 60;
+      let touchStartedOnCanvas = false; // Solo true si el toque comenzó en el canvas (no en elementos HUD)
 
       // ─── GESTIÓN DE EVENTOS TÁCTILES MÓVILES (TOUCH EVENTS) ───
       canvas.addEventListener('touchstart', (e) => {
         if (this.controlMode !== 'first_person_free') return;
+
+        // Solo reaccionar si el toque empezó directamente en el canvas (no en widgets HUD)
+        touchStartedOnCanvas = (e.target === canvas);
 
         if (e.touches.length === 1 && !isPinching) {
           isDragging = true;
@@ -261,14 +278,15 @@
         }
 
         if (e.touches.length === 0) {
-          // Si fue un toque sin arrastre (< 10px y < 350ms), medir objetivo
-          if (isDragging && movedDist < 10 && (Date.now() - touchStartTime) < 350) {
+          // Solo medir si el toque comenzó en el canvas (no en un widget HUD), no hubo arrastre y fue rápido
+          if (isDragging && touchStartedOnCanvas && movedDist < 10 && (Date.now() - touchStartTime) < 350) {
             const rect = canvas.getBoundingClientRect();
             const pos = new Cesium.Cartesian2(startX - rect.left, startY - rect.top);
             this.measureAtScreenPosition(pos);
           }
           isDragging = false;
           isPinching = false;
+          touchStartedOnCanvas = false;
         }
       };
 
@@ -316,10 +334,13 @@
       window.addEventListener('mouseup', (e) => {
         if (isMouseDown) {
           isMouseDown = false;
+          // Solo medir si el click fue directamente sobre el canvas del mapa y no sobre un botón o widget de la interfaz
           if (mouseMovedDist < 8 && (Date.now() - mouseDownTime) < 350 && this.controlMode !== 'aerial') {
-            const rect = canvas.getBoundingClientRect();
-            const pos = new Cesium.Cartesian2(e.clientX - rect.left, e.clientY - rect.top);
-            this.measureAtScreenPosition(pos);
+            if (e.target === canvas) {
+              const rect = canvas.getBoundingClientRect();
+              const pos = new Cesium.Cartesian2(e.clientX - rect.left, e.clientY - rect.top);
+              this.measureAtScreenPosition(pos);
+            }
           }
         }
       });
@@ -621,9 +642,15 @@
     }
 
     setCustomHeight(heightMeters) {
-      if (this.controlMode === 'aerial') return this.postureHeight;
       const Cesium = (typeof window !== 'undefined' && window.Cesium) ? window.Cesium : (typeof globalThis !== 'undefined' ? globalThis.Cesium : null);
       this.postureHeight = Math.max(0.05, Math.min(50.0, +heightMeters.toFixed(2)));
+
+      if (this.controlMode === 'aerial') {
+        if (this.onHeightChanged) {
+          this.onHeightChanged(this.postureHeight, this.postureHeight);
+        }
+        return this.postureHeight;
+      }
 
       const baseGround = this.groundAltitudeLocked !== null ? this.groundAltitudeLocked : this.userAlt;
       const totalCamAlt = baseGround + this.postureHeight;
@@ -637,6 +664,32 @@
         this.onHeightChanged(this.postureHeight, totalCamAlt);
       }
       return this.postureHeight;
+    }
+
+    /**
+     * Alterna la visibilidad de los edificios y estructuras 3D (Google Photorealistic 3D Tiles).
+     * Cuando están desactivados, se activa el globo de terreno de Cesium como fallback topográfico.
+     */
+    toggleBuildings(show) {
+      this.showBuildings = (typeof show === 'boolean') ? show : !this.showBuildings;
+      const scene = this.viewer?.scene;
+      if (!scene) return this.showBuildings;
+
+      // Mostrar/ocultar el tileset fotorrealista de Google
+      if (this.tileset) {
+        this.tileset.show = this.showBuildings;
+      }
+
+      // Cuando se desactivan los edificios 3D, mostrar el globo de terreno como superficie de referencia
+      if (scene.globe) {
+        scene.globe.show = !this.showBuildings;
+      }
+
+      this._notifyStatus(this.showBuildings
+        ? '🏙️ Edificios 3D activados'
+        : '🗺️ Edificios 3D desactivados (solo topografía)');
+
+      return this.showBuildings;
     }
 
     /**
@@ -855,6 +908,31 @@
         this.viewer.entities.remove(this.sightLineEntity);
         this.sightLineEntity = null;
       }
+    }
+
+    /**
+     * Configura el proveedor de terreno de elevación de Cesium como capa de respaldo
+     * para cuando los edificios 3D están desactivados.
+     */
+    _setupTerrainProvider() {
+      const Cesium = window.Cesium;
+      if (!Cesium || !this.viewer) return;
+      try {
+        // CesiumTerrainProvider con el servicio de terreno de Cesium Ion (Asset 1)
+        if (Cesium.createWorldTerrainAsync) {
+          Cesium.createWorldTerrainAsync({ requestWaterMask: false, requestVertexNormals: false })
+            .then((tp) => {
+              if (this.viewer && !this.viewer.isDestroyed()) {
+                this.viewer.terrainProvider = tp;
+              }
+            })
+            .catch(() => {});
+        } else if (Cesium.CesiumTerrainProvider) {
+          this.viewer.terrainProvider = new Cesium.CesiumTerrainProvider({
+            url: Cesium.IonResource.fromAssetId(1)
+          });
+        }
+      } catch (_) {}
     }
 
     destroy() {
