@@ -65,8 +65,24 @@
         ? document.getElementById(this.containerId)
         : this.containerId;
 
-      this.viewer = new Cesium.Viewer(container, {
-        globe: true,
+      // Validar que el contenedor existe en el DOM antes de intentar crear el Viewer
+      if (!container) {
+        throw new Error(`Contenedor Cesium no encontrado: "${this.containerId}"`);
+      }
+
+      // Verificar soporte WebGL antes de crear el Viewer para dar un error más claro
+      const testCanvas = document.createElement('canvas');
+      const hasWebGL = !!(
+        testCanvas.getContext('webgl2') ||
+        testCanvas.getContext('webgl') ||
+        testCanvas.getContext('experimental-webgl')
+      );
+      if (!hasWebGL) {
+        throw new Error('WebGL no está disponible en este navegador o dispositivo.');
+      }
+
+      // Intentar con high-performance primero; si falla, reintentar sin preferencia de GPU
+      const buildViewerOptions = (powerPref) => ({
         baseLayer: false,
         skyBox: false,
         skyAtmosphere: false,
@@ -82,13 +98,15 @@
         infoBox: false,
         selectionIndicator: false,
         creditContainer: document.createElement('div'),
-        contextOptions: {
-          webgl: {
-            preserveDrawingBuffer: false,
-            powerPreference: 'high-performance'
-          }
-        }
+        ...(powerPref ? { contextOptions: { webgl: { preserveDrawingBuffer: false, powerPreference: powerPref } } } : {})
       });
+
+      try {
+        this.viewer = new Cesium.Viewer(container, buildViewerOptions('high-performance'));
+      } catch (_gpuErr) {
+        // Fallback: sin preferencia de GPU (compatible con entornos limitados y VMs)
+        this.viewer = new Cesium.Viewer(container, buildViewerOptions(null));
+      }
 
       const scene = this.viewer.scene;
       scene.backgroundColor = Cesium.Color.fromCssColorString('#020617');
