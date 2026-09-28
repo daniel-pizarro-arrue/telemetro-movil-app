@@ -1,6 +1,6 @@
 /**
  * sensorManager.js - Gestor de sensores móviles (GPS, Brújula, Giroscopio e Inclinómetro)
- * Soporta orientación de pantalla (vertical / horizontal) y filtro pasa-bajos contra vibración.
+ * Con detección de estado de conexión GPS (desconectado, conectando, conectado) y suavizado.
  */
 
 (function (root, factory) {
@@ -14,20 +14,21 @@
 
   class SensorManager {
     constructor() {
-      // Estado GPS
+      // Estado GPS: status = 'disconnected' | 'connecting' | 'connected'
       this.gps = {
         lat: -33.4489,
         lng: -70.6693,
         alt: 600,
         accuracy: null,
         active: false,
+        status: 'connecting',
         timestamp: null
       };
 
       // Estado de Orientación
       this.orientation = {
         heading: 0, // 0..360 (Norte = 0)
-        pitch: 0,   // -90..+90 (Horizonte = 0)
+        pitch: 0,   // -88..+88 (Horizonte = 0)
         roll: 0,
         active: false
       };
@@ -36,7 +37,7 @@
       this._smoothHeading = 0;
       this._smoothPitch = 0;
       this._smoothRoll = 0;
-      this.filterAlpha = 0.25; // 0.25 = buen compromiso entre reactividad y estabilidad
+      this.filterAlpha = 0.16; // Suavizado equilibrado contra micro-vibración de manos
 
       this._watchId = null;
       this._orientationHandler = null;
@@ -52,13 +53,18 @@
      */
     startGps() {
       if (!('geolocation' in navigator)) {
+        this.gps.status = 'disconnected';
+        if (this.onGpsUpdate) this.onGpsUpdate(this.gps);
         if (this.onError) this.onError('Geolocalización no soportada en este navegador.');
         return;
       }
 
+      this.gps.status = 'connecting';
+      if (this.onGpsUpdate) this.onGpsUpdate(this.gps);
+
       const options = {
         enableHighAccuracy: true,
-        timeout: 10000,
+        timeout: 12000,
         maximumAge: 0
       };
 
@@ -73,12 +79,21 @@
           this.gps.active = true;
           this.gps.timestamp = Date.now();
 
+          // Estado según precisión: verde si <= 25m, amarillo si > 25m
+          if (pos.coords.accuracy != null && pos.coords.accuracy <= 25) {
+            this.gps.status = 'connected'; // Verde
+          } else {
+            this.gps.status = 'connecting'; // Amarillo
+          }
+
           if (this.onGpsUpdate) {
             this.onGpsUpdate(this.gps);
           }
         },
         (err) => {
           console.warn('Error GPS:', err.message);
+          this.gps.status = 'disconnected'; // Rojo
+          if (this.onGpsUpdate) this.onGpsUpdate(this.gps);
           if (this.onError) this.onError(`GPS: ${err.message}`);
         },
         options
@@ -89,7 +104,8 @@
      * Solicita permisos e inicia los sensores de orientación del móvil
      */
     async startOrientation() {
-      // Soporte para iOS 13+ (requiere gesto del usuario para solicitar permiso)
+      if (this.orientation.active) return true;
+
       if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
         try {
           const permission = await DeviceOrientationEvent.requestPermission();
@@ -106,7 +122,6 @@
         this._processDeviceOrientation(event);
       };
 
-      // Preferir el evento absoluto si está disponible (Chrome Android)
       if ('ondeviceorientationabsolute' in window) {
         window.addEventListener('deviceorientationabsolute', this._orientationHandler, true);
       } else if ('ondeviceorientation' in window) {
@@ -128,41 +143,29 @@
       let pitch = 0;
       let roll = 0;
 
-      // 1. Detectar rumbo de la brújula
       if (event.webkitCompassHeading !== undefined && event.webkitCompassHeading !== null) {
-        // iOS Safari entrega rumbo directo respecto al Norte magnético
         heading = event.webkitCompassHeading;
       } else if (event.alpha !== null) {
-        // En Android, alpha mide rotación respecto al norte si es evento absoluto
-        // Si el teléfono apunta al frente, convertimos a rumbo 360
         heading = (360 - event.alpha) % 360;
       }
 
-      // 2. Inclinación del teléfono (Pitch / Beta)
-      // Cuando el usuario sostiene el teléfono vertical frente a sus ojos mirando al frente: beta ≈ 90°.
-      // Horizonte = 0°. Por lo tanto, pitch = beta - 90°
       const rawBeta = event.beta || 0;
       const rawGamma = event.gamma || 0;
 
-      // 3. Compensación de orientación de pantalla (0°, 90°, -90°, 180°)
       const screenAngle = this._getScreenOrientationAngle();
 
       if (screenAngle === 90) {
-        // Modo horizontal hacia la izquierda
         pitch = rawGamma;
         heading = (heading + 90) % 360;
       } else if (screenAngle === -90 || screenAngle === 270) {
-        // Modo horizontal hacia la derecha
         pitch = -rawGamma;
         heading = (heading - 90 + 360) % 360;
       } else {
-        // Modo vertical (Portrait) estándar
         pitch = rawBeta - 90;
       }
 
       roll = rawGamma;
 
-      // 4. Suavizado de valores angulares (evita salto de 359° a 0°)
       this._smoothHeading = this._lerpAngle(this._smoothHeading, heading, this.filterAlpha);
       this._smoothPitch = this._smoothPitch + (pitch - this._smoothPitch) * this.filterAlpha;
       this._smoothRoll = this._smoothRoll + (roll - this._smoothRoll) * this.filterAlpha;
@@ -186,9 +189,6 @@
       return 0;
     }
 
-    /**
-     * Interpolación lineal angular para evitar discontinuidades en el cruce por el Norte (0/360)
-     */
     _lerpAngle(a, b, t) {
       let diff = (b - a) % 360;
       if (diff > 180) diff -= 360;
@@ -196,9 +196,6 @@
       return (a + diff * t + 360) % 360;
     }
 
-    /**
-     * Detiene los sensores
-     */
     stop() {
       if (this._watchId != null && navigator.geolocation) {
         navigator.geolocation.clearWatch(this._watchId);
@@ -209,6 +206,7 @@
         window.removeEventListener('deviceorientation', this._orientationHandler, true);
         this._orientationHandler = null;
       }
+      this.orientation.active = false;
     }
   }
 

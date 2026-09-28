@@ -1,6 +1,6 @@
 /**
  * cesium3DMap.js - Controlador del visor 3D fotorrealista de CesiumJS con Google Photorealistic 3D Tiles
- * Optimizado para dispositivos móviles, telemetría y medición táctica en tiempo real.
+ * Optimizado para estabilidad máxima: anclaje de posición anti-jitter, bloqueo de altitud y suavizado.
  */
 
 (function (root, factory) {
@@ -19,28 +19,31 @@
       this.containerId = containerId;
       this.googleApiKey = options.googleApiKey || DEFAULT_GOOGLE_KEY;
 
-      // Estado del usuario
+      // Estado del observador (con anclaje anti-jitter)
       this.userLat = options.initialLat || -33.4489;
       this.userLng = options.initialLng || -70.6693;
-      this.userAlt = options.initialAlt || 600; // metros sobre nivel del mar
-      this.deviceHeight = 1.6; // Altura de los ojos del usuario con el teléfono en mano
+      this.userAlt = options.initialAlt || 600;
+      this.deviceHeight = 1.6; // Altura a nivel de ojos
+
+      // Anclaje de posición y altitud estable
+      this._anchorLat = null;
+      this._anchorLng = null;
+      this._groundAltitudeLocked = null;
+      this._cachedDestination = null;
 
       // Orientación del dispositivo
-      this.heading = 0; // Grados 0..360 (Norte = 0)
-      this.pitch = 0;   // Grados -90..+90 (Horizonte = 0, Arriba = +90, Abajo = -90)
+      this.heading = 0; // Rumbo brújula 0..360
+      this.pitch = 0;   // Inclinación -88..+88
       this.roll = 0;
-      this.headingOffset = 0; // Ajuste fino manual de calibración de brújula
 
-      // Modo de operación: 'sensor' (primera persona siguiendo brújula) o 'free' (órbita/tactil)
+      // Modo de operación: 'sensor' (sigue brújula) o 'free' (órbita/táctil)
       this.viewMode = 'sensor';
-      this.isFrozen = false; // Permite congelar la vista para apuntar con calma
 
-      // Instancias de Cesium
+      // Instancias Cesium
       this.viewer = null;
       this.tileset = null;
       this.targetEntity = null;
       this.sightLineEntity = null;
-      this.userEntity = null;
 
       // Callbacks
       this.onTargetMeasured = null;
@@ -52,19 +55,18 @@
      */
     async init() {
       if (!window.Cesium) {
-        throw new Error('CesiumJS no está cargado en el documento.');
+        throw new Error('CesiumJS no está disponible en la ventana.');
       }
       const Cesium = window.Cesium;
 
-      this._notifyStatus('Iniciando motor 3D Cesium...');
+      this._notifyStatus('Iniciando mapa 3D fotorrealista...');
 
       const container = typeof this.containerId === 'string'
         ? document.getElementById(this.containerId)
         : this.containerId;
 
-      // Desactivar controles y widgets innecesarios para máximo rendimiento táctil y FPS móvil
       this.viewer = new Cesium.Viewer(container, {
-        globe: false, // Google 3D Tiles incluye la superficie y atmósfera completa
+        globe: false,
         baseLayer: false,
         skyBox: false,
         skyAtmosphere: false,
@@ -79,7 +81,7 @@
         vrButton: false,
         infoBox: false,
         selectionIndicator: false,
-        creditContainer: document.createElement('div'), // Ocultar créditos en UI principal
+        creditContainer: document.createElement('div'),
         contextOptions: {
           webgl: {
             preserveDrawingBuffer: false,
@@ -91,14 +93,12 @@
       const scene = this.viewer.scene;
       scene.backgroundColor = Cesium.Color.fromCssColorString('#020617');
 
-      // Optimizar antialiasing y renderizado móvil
       if (scene.postProcessStages?.fxaa) {
         scene.postProcessStages.fxaa.enabled = true;
       }
       this.viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, 1.5);
       this.viewer.targetFrameRate = 60;
 
-      // Configurar reintentos robustos ante microcortes móviles
       if (Cesium.Resource) {
         Cesium.Resource.retryAttempts = 3;
         Cesium.Resource.retryCallback = (resource, error) => {
@@ -111,8 +111,6 @@
         };
       }
 
-      this._notifyStatus('Conectando a Google Photorealistic 3D Tiles...');
-
       try {
         if (Cesium.GoogleMaps) {
           Cesium.GoogleMaps.defaultApiKey = this.googleApiKey;
@@ -121,8 +119,7 @@
         this.tileset = await Cesium.createGooglePhotorealistic3DTileset(this.googleApiKey);
         scene.primitives.add(this.tileset);
 
-        // Ajustes de rendimiento y nitidez probados para 3D Tiles en móviles
-        this.tileset.maximumScreenSpaceError = 24; // Balance óptimo entre nitidez y descarga rápida
+        this.tileset.maximumScreenSpaceError = 24;
         this.tileset.skipLevelOfDetail = true;
         this.tileset.baseScreenSpaceError = 1024;
         this.tileset.skipScreenSpaceErrorFactor = 16;
@@ -130,19 +127,22 @@
         this.tileset.cullRequestsWhileMovingMultiplier = 60.0;
         this.tileset.dynamicScreenSpaceError = true;
         this.tileset.preloadFlightCamera = true;
-        this.tileset.maximumMemoryUsage = 384; // 384 MB de caché GPU para no saturar navegadores móviles
+        this.tileset.maximumMemoryUsage = 384;
 
         this._notifyStatus('✅ Mapa 3D fotorrealista activo');
       } catch (err) {
-        console.error('Error cargando Google Photorealistic 3D Tiles:', err);
-        this._notifyStatus('⚠️ Error cargando 3D Tiles de Google. Verifique conexión.');
+        console.error('Error cargando Google 3D Tiles:', err);
+        this._notifyStatus('⚠️ Error cargando 3D Tiles. Verifique conexión.');
       }
 
-      // Configurar interacción táctil
       this._setupInteraction();
 
-      // Posicionar cámara inicial
-      this.updateCamera();
+      // Configurar modo inicial
+      this.setViewMode(this.viewMode);
+
+      // Calcular anclaje inicial
+      this._updateAnchor(this.userLat, this.userLng, this.userAlt, true);
+      this.updateCameraOrientation();
 
       return this;
     }
@@ -153,42 +153,67 @@
       }
     }
 
-    /**
-     * Configura controladores de eventos de clic y toque en pantalla para medición
-     */
     _setupInteraction() {
       const Cesium = window.Cesium;
       const handler = new Cesium.ScreenSpaceEventHandler(this.viewer.scene.canvas);
 
-      // Medir al hacer clic o tap directo sobre el mapa
       handler.setInputAction((movement) => {
         this.measureAtScreenPosition(movement.position);
       }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
-      // Guardar referencia para destruirlo al limpiar
       this._eventHandler = handler;
     }
 
     /**
-     * Actualiza la ubicación del usuario (recibida desde GPS)
+     * Actualiza la ubicación del usuario con filtro de umbral anti-jitter (Deadband)
      */
     updateUserPosition(lat, lng, alt) {
-      this.userLat = lat;
-      this.userLng = lng;
-      if (alt != null && !isNaN(alt) && alt > -500) {
-        this.userAlt = alt;
+      if (this._anchorLat === null) {
+        this._updateAnchor(lat, lng, alt, true);
+        return;
       }
 
-      // Si el tileset ya cargó, muestrear altura precisa del suelo bajo el usuario
-      this._sampleGroundAltitudeUnderUser();
+      // Calcular desplazamiento respecto al ancla actual con fórmula rápida Haversine
+      const dLat = (lat - this._anchorLat) * 111139;
+      const dLng = (lng - this._anchorLng) * 111139 * Math.cos((this._anchorLat * Math.PI) / 180);
+      const dist = Math.sqrt(dLat * dLat + dLng * dLng);
 
-      if (this.viewMode === 'sensor' && !this.isFrozen) {
-        this.updateCamera();
+      // Si el desplazamiento es menor a 3.5 metros, se considera ruido de GPS y se ignora
+      if (dist < 3.5) {
+        return;
+      }
+
+      // Si se movió más de 3.5 metros, actualizamos el anclaje suavemente
+      const smoothLat = this._anchorLat * 0.7 + lat * 0.3;
+      const smoothLng = this._anchorLng * 0.7 + lng * 0.3;
+      this._updateAnchor(smoothLat, smoothLng, alt, false);
+    }
+
+    _updateAnchor(lat, lng, alt, force = false) {
+      this._anchorLat = lat;
+      this._anchorLng = lng;
+      this.userLat = lat;
+      this.userLng = lng;
+
+      // Si no tenemos altitud del suelo bloqueada o nos movimos más de 50m, muestrear del terreno
+      if (this._groundAltitudeLocked === null || force) {
+        if (alt != null && !isNaN(alt) && alt > -200) {
+          this.userAlt = alt;
+        }
+        this._sampleGroundAltitudeUnderUser();
+      }
+
+      const Cesium = window.Cesium;
+      const totalCamAlt = (this._groundAltitudeLocked !== null ? this._groundAltitudeLocked : this.userAlt) + this.deviceHeight;
+      this._cachedDestination = Cesium.Cartesian3.fromDegrees(this.userLng, this.userLat, totalCamAlt);
+
+      if (this.viewMode === 'sensor') {
+        this.updateCameraOrientation();
       }
     }
 
     /**
-     * Muestrea la elevación exacta del terreno bajo los pies del usuario
+     * Muestrea una sola vez la elevación del suelo bajo el usuario para fijar la altitud
      */
     _sampleGroundAltitudeUnderUser() {
       if (!this.viewer || !this.viewer.scene) return;
@@ -197,42 +222,30 @@
         const carto = Cesium.Cartographic.fromDegrees(this.userLng, this.userLat);
         const sampled = this.viewer.scene.sampleHeight(carto);
         if (typeof sampled === 'number' && !isNaN(sampled) && sampled > -200) {
-          // Altura real del suelo detectada por la fotogrametría 3D
+          // Altitud del terreno real detectada y bloqueada: NUNCA más saltará
+          this._groundAltitudeLocked = sampled;
           this.userAlt = sampled;
+          const totalCamAlt = this._groundAltitudeLocked + this.deviceHeight;
+          this._cachedDestination = Cesium.Cartesian3.fromDegrees(this.userLng, this.userLat, totalCamAlt);
         }
-      } catch (e) {
-        // En caso de que las teselas aún no estén en memoria
-      }
+      } catch (e) {}
     }
 
     /**
-     * Actualiza la orientación del dispositivo (Brújula + Inclinación)
-     * @param {number} headingDeg - Rumbo brújula (0..360)
-     * @param {number} pitchDeg - Inclinación (-90..90)
-     * @param {number} rollDeg - Balanceo (-90..90)
+     * Actualiza la orientación del dispositivo sin reconstruir la posición de destino
      */
     updateDeviceOrientation(headingDeg, pitchDeg, rollDeg) {
       this.heading = headingDeg;
       this.pitch = pitchDeg;
       this.roll = rollDeg || 0;
 
-      if (this.viewMode === 'sensor' && !this.isFrozen) {
-        this.updateCamera();
-      }
-    }
-
-    /**
-     * Modifica el offset de calibración de azimut (ej. ±15° para alinear con el cerro real)
-     */
-    setHeadingOffset(deg) {
-      this.headingOffset = deg;
       if (this.viewMode === 'sensor') {
-        this.updateCamera();
+        this.updateCameraOrientation();
       }
     }
 
     /**
-     * Cambia entre 'sensor' (sigue orientación del celular) y 'free' (navegación libre táctil)
+     * Cambia entre 'sensor' (primera persona con brújula) y 'free' (navegación libre táctil)
      */
     setViewMode(mode) {
       this.viewMode = mode;
@@ -240,15 +253,15 @@
       if (!controller) return;
 
       if (mode === 'sensor') {
-        // En modo sensor, bloquear rotación táctil para que manden los sensores
+        // En modo sensor, desactivar inputs del ratón/táctil para la cámara para evitar conflictos
         controller.enableRotate = false;
         controller.enableTranslate = false;
-        controller.enableZoom = true;
+        controller.enableZoom = false;
         controller.enableTilt = false;
         controller.enableLook = false;
-        this.updateCamera();
+        this.updateCameraOrientation();
       } else {
-        // En modo libre, permitir interacción completa táctil
+        // En modo libre, permitir rotar, orbitar y hacer zoom con los dedos
         controller.enableRotate = true;
         controller.enableTranslate = true;
         controller.enableZoom = true;
@@ -258,33 +271,22 @@
     }
 
     /**
-     * Congela o descongela la orientación de la cámara
+     * Rota la cámara en su lugar manteniendo la posición anclada (Cero Saltos)
      */
-    setFrozen(frozen) {
-      this.isFrozen = frozen;
-    }
-
-    /**
-     * Aplica la posición y orientación del usuario a la cámara de Cesium
-     */
-    updateCamera() {
+    updateCameraOrientation() {
       if (!this.viewer || !this.viewer.camera) return;
       const Cesium = window.Cesium;
 
-      // Altura total de la cámara: cota del terreno + altura de ojos
-      const totalCamAlt = this.userAlt + this.deviceHeight;
-      const dest = Cesium.Cartesian3.fromDegrees(this.userLng, this.userLat, totalCamAlt);
+      if (!this._cachedDestination) {
+        const totalCamAlt = (this._groundAltitudeLocked !== null ? this._groundAltitudeLocked : this.userAlt) + this.deviceHeight;
+        this._cachedDestination = Cesium.Cartesian3.fromDegrees(this.userLng, this.userLat, totalCamAlt);
+      }
 
-      // Rumbo compensado por la calibración manual
-      const effectiveHeading = (this.heading + this.headingOffset + 360) % 360;
-
-      // Cesium: Heading (0 = Norte, 90 = Este, rad), Pitch (-90 = Nadir, 0 = Horizonte, 90 = Cenit, rad)
-      const headingRad = Cesium.Math.toRadians(effectiveHeading);
-      // Limitamos el pitch para evitar singularidades en el cenit exacto
-      const pitchRad = Cesium.Math.toRadians(Math.max(-89.0, Math.min(89.0, this.pitch)));
+      const headingRad = Cesium.Math.toRadians(this.heading);
+      const pitchRad = Cesium.Math.toRadians(Math.max(-88.0, Math.min(88.0, this.pitch)));
 
       this.viewer.camera.setView({
-        destination: dest,
+        destination: this._cachedDestination,
         orientation: {
           heading: headingRad,
           pitch: pitchRad,
@@ -294,7 +296,7 @@
     }
 
     /**
-     * Mide el objetivo en el centro de la retícula de la pantalla (disparo táctico)
+     * Mide el objetivo en el centro de la retícula
      */
     measureCenterReticle() {
       if (!this.viewer || !this.viewer.scene) return null;
@@ -305,15 +307,13 @@
     }
 
     /**
-     * Realiza un raycast / pick 3D en la pantalla y calcula la telemetría completa
-     * @param {Cesium.Cartesian2} screenPosition
+     * Realiza un raycast / pick 3D en la pantalla y calcula la telemetría táctica
      */
     measureAtScreenPosition(screenPosition) {
       if (!this.viewer || !this.viewer.scene) return null;
       const Cesium = window.Cesium;
       const scene = this.viewer.scene;
 
-      // Obtener posición 3D real sobre la malla fotorrealista de Google 3D Tiles
       let cartesianPicked = null;
       try {
         cartesianPicked = scene.pickPosition(screenPosition);
@@ -321,7 +321,6 @@
         console.warn('Error en pickPosition:', err);
       }
 
-      // Si no impacta la malla directa, intentar con el elipsoide como respaldo
       if (!cartesianPicked) {
         const ray = scene.camera.getPickRay(screenPosition);
         if (ray) {
@@ -334,44 +333,46 @@
         return null;
       }
 
-      // Convertir a coordenadas geodésicas (Lat, Lng, Altitud)
       const carto = Cesium.Cartographic.fromCartesian(cartesianPicked);
       const targetLat = Cesium.Math.toDegrees(carto.latitude);
       const targetLng = Cesium.Math.toDegrees(carto.longitude);
       const targetAlt = carto.height;
 
-      // Cálculos geodésicos con GeoMath
-      const GeoMath = window.GeoMath || (typeof require !== 'undefined' ? require('./geoMath.js') : null);
+      const GeoMath = window.GeoMath;
       let horizDistance = 0;
       let directDistance = 0;
       let bearing = 0;
       let elevAngle = 0;
+      let utm = { formatted: '---' };
+
+      const userAltTotal = (this._groundAltitudeLocked !== null ? this._groundAltitudeLocked : this.userAlt) + this.deviceHeight;
 
       if (GeoMath) {
         horizDistance = GeoMath.haversineDistance(this.userLat, this.userLng, targetLat, targetLng);
-        directDistance = GeoMath.calculate3DDistance(horizDistance, this.userAlt + this.deviceHeight, targetAlt);
+        directDistance = GeoMath.calculate3DDistance(horizDistance, userAltTotal, targetAlt);
         bearing = GeoMath.calculateBearing(this.userLat, this.userLng, targetLat, targetLng);
-        elevAngle = GeoMath.calculateElevationAngle(horizDistance, this.userAlt + this.deviceHeight, targetAlt);
+        elevAngle = GeoMath.calculateElevationAngle(horizDistance, userAltTotal, targetAlt);
+        utm = GeoMath.latLonToUTM(targetLat, targetLng);
       } else {
-        // Fallback básico
-        const userCartesian = Cesium.Cartesian3.fromDegrees(this.userLng, this.userLat, this.userAlt + this.deviceHeight);
+        const userCartesian = Cesium.Cartesian3.fromDegrees(this.userLng, this.userLat, userAltTotal);
         directDistance = Cesium.Cartesian3.distance(userCartesian, cartesianPicked);
         horizDistance = directDistance;
       }
 
-      const deltaElevation = targetAlt - (this.userAlt + this.deviceHeight);
+      const deltaElevation = targetAlt - userAltTotal;
 
       const result = {
         target: {
           lat: targetLat,
           lng: targetLng,
           alt: targetAlt,
+          utm: utm.formatted,
           cartesian: cartesianPicked
         },
         user: {
           lat: this.userLat,
           lng: this.userLng,
-          alt: this.userAlt + this.deviceHeight
+          alt: userAltTotal
         },
         directDistance,
         horizDistance,
@@ -381,7 +382,6 @@
         timestamp: new Date().toISOString()
       };
 
-      // Representar el objetivo visualmente en 3D
       this.drawTargetMarker(cartesianPicked, result);
 
       if (this.onTargetMeasured) {
@@ -392,42 +392,38 @@
     }
 
     /**
-     * Dibuja marcador visual 3D táctico y línea de visión hacia el objetivo
+     * Dibuja marcador visual 3D táctico y línea láser hacia el objetivo
      */
     drawTargetMarker(targetCartesian, telemetryData) {
       if (!this.viewer) return;
       const Cesium = window.Cesium;
       const entities = this.viewer.entities;
 
-      // Limpiar objetivo anterior
       this.clearTarget();
 
-      const userCartesian = Cesium.Cartesian3.fromDegrees(
-        this.userLng,
-        this.userLat,
-        this.userAlt + this.deviceHeight
-      );
+      const userAltTotal = (this._groundAltitudeLocked !== null ? this._groundAltitudeLocked : this.userAlt) + this.deviceHeight;
+      const userCartesian = Cesium.Cartesian3.fromDegrees(this.userLng, this.userLat, userAltTotal);
 
+      const GeoMath = window.GeoMath;
       const distLabel = telemetryData?.directDistance != null
-        ? (telemetryData.directDistance < 1000
-            ? `${Math.round(telemetryData.directDistance)} m`
-            : `${(telemetryData.directDistance / 1000).toFixed(2)} km`)
+        ? (GeoMath ? GeoMath.formatDistance(telemetryData.directDistance) : `${Math.round(telemetryData.directDistance)} m`)
         : 'OBJETIVO';
 
-      // 1. Marcador puntual en el objetivo
+      const milsVal = GeoMath ? GeoMath.degreesToMils(telemetryData.bearing) : Math.round(telemetryData.bearing);
+
       this.targetEntity = entities.add({
         position: targetCartesian,
         point: {
           pixelSize: 12,
-          color: Cesium.Color.fromCssColorString('#00ffcc'),
+          color: Cesium.Color.fromCssColorString('#00f0ff'),
           outlineColor: Cesium.Color.BLACK,
           outlineWidth: 2,
           disableDepthTestDistance: Number.POSITIVE_INFINITY
         },
         label: {
-          text: `🎯 ${distLabel}\nΔH: ${Math.round(telemetryData.deltaElevation)}m`,
-          font: 'bold 13px monospace',
-          fillColor: Cesium.Color.fromCssColorString('#00ffcc'),
+          text: `🎯 ${distLabel}\nΔH: ${Math.round(telemetryData.deltaElevation)}m | Az: ${milsVal} ₥`,
+          font: 'bold 12px monospace',
+          fillColor: Cesium.Color.fromCssColorString('#00f0ff'),
           outlineColor: Cesium.Color.BLACK,
           outlineWidth: 3,
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,
@@ -436,25 +432,18 @@
         }
       });
 
-      // 2. Línea de visión directa láser (Sight Line)
       this.sightLineEntity = entities.add({
         polyline: {
           positions: [userCartesian, targetCartesian],
           width: 3,
           material: new Cesium.PolylineGlowMaterialProperty({
             glowPower: 0.25,
-            color: Cesium.Color.fromCssColorString('#00ffcc')
-          }),
-          depthFailMaterial: new Cesium.PolylineDashMaterialProperty({
-            color: Cesium.Color.fromCssColorString('#ffaa00')
+            color: Cesium.Color.fromCssColorString('#00f0ff')
           })
         }
       });
     }
 
-    /**
-     * Elimina los marcadores 3D del visor
-     */
     clearTarget() {
       if (!this.viewer) return;
       if (this.targetEntity) {
@@ -467,21 +456,6 @@
       }
     }
 
-    /**
-     * Mueve suavemente la vista hacia un punto
-     */
-    flyTo(lat, lng, height = 800) {
-      if (!this.viewer) return;
-      const Cesium = window.Cesium;
-      this.viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(lng, lat, height),
-        duration: 1.5
-      });
-    }
-
-    /**
-     * Libera memoria y destruye el visor
-     */
     destroy() {
       if (this._eventHandler) {
         this._eventHandler.destroy();

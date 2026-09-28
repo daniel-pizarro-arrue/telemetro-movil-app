@@ -1,18 +1,16 @@
-/* style.css - Estilos tácticos militares y futuristas para Telémetro Móvil 3D */
+/* style.css - Interfaz Táctica Minimalista y Limpia para Telémetro Móvil */
 :root {
   --bg-primary: #030712;
-  --bg-surface: rgba(15, 23, 42, 0.82);
-  --bg-surface-active: rgba(30, 41, 59, 0.92);
-  --border-glow: rgba(0, 240, 255, 0.4);
+  --bg-surface: rgba(10, 16, 26, 0.85);
+  --border-glow: rgba(0, 240, 255, 0.35);
   --cyan-bright: #00f0ff;
   --cyan-dim: #0284c7;
   --emerald-accent: #10b981;
-  --amber-warning: #f59e0b;
-  --red-alert: #ef4444;
+  --amber-accent: #f59e0b;
+  --red-accent: #ef4444;
   --text-main: #f8fafc;
   --text-muted: #94a3b8;
   --font-mono: 'SF Mono', 'Roboto Mono', 'Cascadia Code', Consolas, monospace;
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
 
 * {
@@ -41,10 +39,10 @@ html, body {
   width: 100%;
   height: 100%;
   z-index: 1;
-  background: radial-gradient(circle at center, #0b1528 0%, #020617 100%);
+  background: #020617;
 }
 
-/* Capa de interfaz HUD táctica */
+/* Capa HUD Táctica */
 #hudOverlay {
   position: absolute;
   top: 0;
@@ -58,130 +56,146 @@ html, body {
   justify-content: space-between;
 }
 
-/* Header superior */
+/* Header Superior Minimalista */
 .hud-header {
   pointer-events: auto;
   padding: 12px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: linear-gradient(180deg, rgba(2, 6, 23, 0.92) 0%, rgba(2, 6, 23, 0.4) 75%, transparent 100%);
-  backdrop-filter: blur(8px);
+  background: linear-gradient(180deg, rgba(2, 6, 23, 0.85) 0%, transparent 100%);
+  backdrop-filter: blur(4px);
 }
 
-.title-badge {
+/* Indicador Pequeño de Estado GPS */
+.gps-indicator-wrap {
   display: flex;
   align-items: center;
-  gap: 8px;
+  padding: 6px;
 }
 
-.radar-dot {
-  width: 10px;
-  height: 10px;
+.gps-dot {
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  background-color: var(--cyan-bright);
-  box-shadow: 0 0 10px var(--cyan-bright);
-  animation: pulse-glow 2s infinite ease-in-out;
+  transition: all 0.3s ease;
+  box-shadow: 0 0 8px currentColor;
 }
 
-@keyframes pulse-glow {
-  0%, 100% { opacity: 0.4; transform: scale(0.9); }
-  50% { opacity: 1.0; transform: scale(1.15); box-shadow: 0 0 14px var(--cyan-bright); }
+.gps-dot.red {
+  background-color: var(--red-accent);
+  color: var(--red-accent);
+  animation: pulse-dot 1.5s infinite;
 }
 
-.title-text {
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 1.2px;
-  color: var(--cyan-bright);
-  text-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
+.gps-dot.yellow {
+  background-color: var(--amber-accent);
+  color: var(--amber-accent);
+  animation: pulse-dot 2s infinite;
 }
 
-.header-status-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.status-chip {
-  padding: 4px 8px;
-  border-radius: 4px;
-  background: rgba(15, 23, 42, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.status-chip.active {
-  border-color: var(--emerald-accent);
+.gps-dot.green {
+  background-color: var(--emerald-accent);
   color: var(--emerald-accent);
 }
 
-/* Barra superior de brújula / azimut */
+@keyframes pulse-dot {
+  0%, 100% { transform: scale(0.9); opacity: 0.6; }
+  50% { transform: scale(1.15); opacity: 1.0; }
+}
+
+/* Cinta Superior de Azimut en Milésimas (6400) */
 .compass-ribbon {
-  position: absolute;
-  top: 54px;
-  left: 50%;
-  transform: translateX(-50%);
   background: rgba(10, 16, 26, 0.85);
   border: 1px solid var(--border-glow);
   border-radius: 20px;
   padding: 4px 16px;
   display: flex;
   align-items: center;
-  gap: 12px;
-  backdrop-filter: blur(6px);
-  pointer-events: auto;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-}
-
-.compass-value {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--cyan-bright);
+  gap: 8px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
 }
 
 .compass-cardinal {
   color: var(--text-muted);
-  font-weight: bold;
+  font-weight: 700;
+  font-size: 13px;
 }
 
-/* Retícula central (Mira del Telémetro) */
+.compass-value {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--cyan-bright);
+  letter-spacing: 0.5px;
+}
+
+/* Botón de Modo con Icono de Brújula */
+.mode-icon-btn {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 50%;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.mode-icon-btn:active {
+  transform: scale(0.92);
+}
+
+.mode-icon-btn.active {
+  border-color: var(--cyan-bright);
+  color: var(--cyan-bright);
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.4);
+}
+
+.compass-svg {
+  transition: transform 0.3s ease;
+}
+
+.needle-north {
+  fill: var(--cyan-bright);
+}
+
+.needle-south {
+  fill: #64748b;
+}
+
+.mode-icon-btn:not(.active) .needle-north {
+  fill: #64748b;
+}
+
+/* Retícula Central Limpia */
 .reticle-container {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 140px;
-  height: 140px;
+  width: 120px;
+  height: 120px;
   pointer-events: none;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.reticle-crosshair {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-}
-
 .reticle-ring {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 70px;
-  height: 70px;
-  border: 1px dashed rgba(0, 240, 255, 0.45);
+  width: 60px;
+  height: 60px;
+  border: 1px dashed rgba(0, 240, 255, 0.4);
   border-radius: 50%;
 }
 
 .reticle-inner-dot {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
   width: 4px;
   height: 4px;
   background-color: var(--cyan-bright);
@@ -191,233 +205,51 @@ html, body {
 
 .reticle-line {
   position: absolute;
-  background-color: rgba(0, 240, 255, 0.6);
+  background-color: rgba(0, 240, 255, 0.55);
 }
 
 .reticle-line.horizontal-left {
   top: 50%;
-  left: 10px;
-  width: 30px;
+  left: 12px;
+  width: 24px;
   height: 1.5px;
   transform: translateY(-50%);
 }
 
 .reticle-line.horizontal-right {
   top: 50%;
-  right: 10px;
-  width: 30px;
+  right: 12px;
+  width: 24px;
   height: 1.5px;
   transform: translateY(-50%);
 }
 
 .reticle-line.vertical-top {
   left: 50%;
-  top: 10px;
+  top: 12px;
   width: 1.5px;
-  height: 30px;
+  height: 24px;
   transform: translateX(-50%);
 }
 
 .reticle-line.vertical-bottom {
   left: 50%;
-  bottom: 10px;
+  bottom: 12px;
   width: 1.5px;
-  height: 30px;
+  height: 24px;
   transform: translateX(-50%);
 }
 
-.reticle-pitch-badge {
-  position: absolute;
-  right: -55px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 11px;
-  color: var(--cyan-bright);
-  background: rgba(10, 16, 26, 0.7);
-  padding: 2px 6px;
-  border-radius: 3px;
-  border: 1px solid rgba(0, 240, 255, 0.3);
-}
-
-/* Panel de telemetría flotante (Resultados) */
-.telemetry-card {
-  pointer-events: auto;
-  margin: 0 16px 8px 16px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-glow);
-  border-radius: 12px;
-  padding: 14px 16px;
-  backdrop-filter: blur(12px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-  transition: all 0.3s ease;
-  max-width: 500px;
-  align-self: center;
-  width: calc(100% - 32px);
-}
-
-.telemetry-primary-grid {
-  display: grid;
-  grid-template-columns: 1.3fr 1fr 1fr;
-  gap: 12px;
-  align-items: center;
-  margin-bottom: 10px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.telemetry-hero {
-  display: flex;
-  flex-direction: column;
-}
-
-.telemetry-hero .label {
-  font-size: 10px;
-  color: var(--cyan-bright);
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-}
-
-.telemetry-hero .val-big {
-  font-size: 26px;
-  font-weight: 800;
-  color: #fff;
-  letter-spacing: -0.5px;
-  text-shadow: 0 0 12px rgba(0, 240, 255, 0.4);
-}
-
-.telemetry-stat {
-  display: flex;
-  flex-direction: column;
-}
-
-.telemetry-stat .label {
-  font-size: 10px;
-  color: var(--text-muted);
-  text-transform: uppercase;
-}
-
-.telemetry-stat .val {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text-main);
-}
-
-.telemetry-secondary-row {
-  display: flex;
-  justify-content: space-between;
-  font-size: 11px;
-  color: var(--text-muted);
-  margin-bottom: 6px;
-}
-
-.telemetry-secondary-row span strong {
-  color: var(--cyan-bright);
-}
-
-.telemetry-firebase-status {
-  font-size: 10px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--emerald-accent);
-}
-
-/* Barra inferior de acciones tácticas */
-.hud-bottom-actions {
-  pointer-events: auto;
-  padding: 12px 16px 20px 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  background: linear-gradient(0deg, rgba(2, 6, 23, 0.95) 0%, rgba(2, 6, 23, 0.7) 60%, transparent 100%);
-  backdrop-filter: blur(8px);
-}
-
-.btn-tactical {
-  background: rgba(15, 23, 42, 0.85);
-  border: 1px solid rgba(0, 240, 255, 0.4);
-  color: var(--cyan-bright);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 700;
-  padding: 12px 16px;
-  border-radius: 8px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-  transition: all 0.15s ease;
-}
-
-.btn-tactical:active {
-  transform: scale(0.96);
-  background: rgba(0, 240, 255, 0.2);
-}
-
-.btn-tactical.primary {
-  background: linear-gradient(135deg, rgba(0, 240, 255, 0.25) 0%, rgba(2, 132, 199, 0.4) 100%);
-  border: 1px solid var(--cyan-bright);
-  color: #fff;
-  font-size: 14px;
-  padding: 14px 24px;
-  box-shadow: 0 0 20px rgba(0, 240, 255, 0.35);
-}
-
-.btn-tactical.active-toggle {
-  background: rgba(0, 240, 255, 0.3);
-  border-color: var(--cyan-bright);
-  color: #fff;
-  box-shadow: inset 0 0 10px rgba(0, 240, 255, 0.4);
-}
-
-/* Control deslizante de calibración */
-.calibration-bar {
-  pointer-events: auto;
-  margin: 0 16px 8px 16px;
-  background: rgba(15, 23, 42, 0.75);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  padding: 6px 12px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  align-self: center;
-  max-width: 420px;
-  width: calc(100% - 32px);
-}
-
-.calibration-bar label {
-  font-size: 11px;
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-
-.calibration-bar input[type="range"] {
-  flex: 1;
-  accent-color: var(--cyan-bright);
-}
-
-.calibration-val {
-  font-size: 12px;
-  font-weight: bold;
-  color: var(--cyan-bright);
-  min-width: 44px;
-  text-align: right;
-}
-
-/* Notificación de estado temporal */
+/* Notificación Toast */
 #statusToast {
   position: absolute;
-  top: 92px;
+  top: 70px;
   left: 50%;
   transform: translateX(-50%);
   background: rgba(15, 23, 42, 0.92);
   border: 1px solid var(--cyan-bright);
   border-radius: 6px;
-  padding: 6px 14px;
+  padding: 5px 12px;
   font-size: 11px;
   color: var(--cyan-bright);
   backdrop-filter: blur(8px);
@@ -426,38 +258,142 @@ html, body {
   transition: opacity 0.3s ease;
   z-index: 20;
   white-space: nowrap;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
 }
 
 #statusToast.visible {
   opacity: 1;
 }
 
-/* Adaptación para modo horizontal (Landscape en móviles) */
-@media (orientation: landscape) and (max-height: 500px) {
+/* Panel de Telemetría Inferior */
+.telemetry-card {
+  pointer-events: auto;
+  margin: 0 16px 10px 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-glow);
+  border-radius: 10px;
+  padding: 10px 14px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7);
+  max-width: 480px;
+  align-self: center;
+  width: calc(100% - 32px);
+}
+
+.telemetry-grid {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr 1fr;
+  gap: 8px 12px;
+  align-items: center;
+}
+
+.telemetry-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.telemetry-item .label {
+  font-size: 9px;
+  color: var(--text-muted);
+  letter-spacing: 0.8px;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.telemetry-item .val-highlight {
+  font-size: 20px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.5px;
+  text-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
+}
+
+.telemetry-item .val {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.telemetry-item.utm-item {
+  grid-column: 1 / -1;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.val-mono {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cyan-bright);
+  letter-spacing: 0.5px;
+}
+
+/* Barra de Acciones Inferior */
+.hud-bottom-actions {
+  pointer-events: auto;
+  padding: 8px 16px 18px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: linear-gradient(0deg, rgba(2, 6, 23, 0.95) 0%, transparent 100%);
+}
+
+.btn-tactical {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  color: var(--cyan-bright);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 12px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.15s ease;
+}
+
+.btn-tactical:active {
+  transform: scale(0.95);
+}
+
+.btn-tactical.primary {
+  background: linear-gradient(135deg, rgba(0, 240, 255, 0.25) 0%, rgba(2, 132, 199, 0.45) 100%);
+  border: 1px solid var(--cyan-bright);
+  color: #fff;
+  font-size: 15px;
+  padding: 14px 32px;
+  box-shadow: 0 0 18px rgba(0, 240, 255, 0.4);
+  flex: 1;
+  max-width: 260px;
+  justify-content: center;
+}
+
+.btn-tactical.secondary {
+  padding: 14px 18px;
+  color: var(--text-muted);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Modo Horizontal (Landscape) */
+@media (orientation: landscape) and (max-height: 520px) {
   .hud-header {
     padding: 6px 16px;
-  }
-  .compass-ribbon {
-    top: 40px;
-    padding: 2px 12px;
   }
   .telemetry-card {
     position: absolute;
     right: 16px;
     bottom: 12px;
-    width: 290px;
+    width: 270px;
     margin: 0;
-    padding: 8px 12px;
+    padding: 8px 10px;
   }
-  .telemetry-primary-grid {
+  .telemetry-grid {
     grid-template-columns: 1fr 1fr;
-    gap: 6px;
-    margin-bottom: 6px;
-    padding-bottom: 6px;
+    gap: 4px;
   }
-  .telemetry-hero .val-big {
-    font-size: 20px;
+  .telemetry-item .val-highlight {
+    font-size: 16px;
   }
   .hud-bottom-actions {
     position: absolute;
@@ -466,11 +402,7 @@ html, body {
     background: transparent;
     padding: 0;
   }
-  .calibration-bar {
-    position: absolute;
-    left: 16px;
-    bottom: 74px;
-    width: 240px;
-    margin: 0;
+  .btn-tactical.primary {
+    padding: 12px 24px;
   }
 }

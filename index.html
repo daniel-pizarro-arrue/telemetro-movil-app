@@ -6,7 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#030712">
-  <title>Telémetro Móvil 3D - Fotogrametría Fotorrealista</title>
+  <title>Telémetro Móvil 3D</title>
 
   <!-- Estilos CesiumJS -->
   <link rel="stylesheet" href="https://unpkg.com/cesium@1.120.0/Build/Cesium/Widgets/widgets.css">
@@ -15,10 +15,8 @@
   <link rel="stylesheet" href="style.css">
 
   <script>
-    // Configuración base de Cesium para recursos estáticos CDN
     window.CESIUM_BASE_URL = 'https://unpkg.com/cesium@1.120.0/Build/Cesium/';
   </script>
-  <!-- CesiumJS UMD Bundle -->
   <script src="https://unpkg.com/cesium@1.120.0/Build/Cesium/Cesium.js"></script>
 </head>
 <body>
@@ -26,35 +24,36 @@
   <!-- Contenedor del Visor 3D Fullscreen -->
   <div id="cesiumContainer"></div>
 
-  <!-- Capa HUD Táctica -->
+  <!-- Capa HUD Táctica Limpia -->
   <div id="hudOverlay">
     
-    <!-- Barra Superior -->
+    <!-- Barra Superior Minimalista -->
     <header class="hud-header">
-      <div class="title-badge">
-        <div class="radar-dot"></div>
-        <span class="title-text">TELÉMETRO 3D // HUD</span>
+      <!-- Indicador pequeño de estado GPS (Rojo / Amarillo / Verde) -->
+      <div class="gps-indicator-wrap" title="Estado de señal GPS">
+        <div id="gpsDot" class="gps-dot yellow"></div>
       </div>
 
-      <div class="header-status-group">
-        <span id="gpsStatusChip" class="status-chip">GPS: BUSCANDO...</span>
-        <button id="modeToggleBtn" class="status-chip active" title="Alternar entre modo sensores y navegación libre">
-          MODO: BRÚJULA
-        </button>
+      <!-- Cinta de Azimut en Milésimas (6400) -->
+      <div class="compass-ribbon">
+        <span class="compass-cardinal" id="compassCardinal">N</span>
+        <span class="compass-value" id="compassHeadingMils">0000 ₥</span>
       </div>
+
+      <!-- Botón de Modo con Icono de Brújula Activa / Inactiva -->
+      <button id="modeToggleBtn" class="mode-icon-btn active" title="Alternar Modo Brújula / Navegación Libre">
+        <svg id="compassIconSvg" class="compass-svg" viewBox="0 0 24 24" width="24" height="24">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/>
+          <polygon points="12,3 15,12 12,9 9,12" class="needle-north"/>
+          <polygon points="12,21 15,12 12,15 9,12" class="needle-south"/>
+        </svg>
+      </button>
     </header>
 
-    <!-- Cinta de Brújula Superior -->
-    <div class="compass-ribbon">
-      <span class="compass-cardinal" id="compassCardinal">N</span>
-      <span class="compass-value" id="compassHeading">000°</span>
-      <span class="compass-cardinal" id="compassPitch">0.0°</span>
-    </div>
+    <!-- Toast de Notificación Rápida -->
+    <div id="statusToast">Iniciando mapa 3D...</div>
 
-    <!-- Mensaje Toast de Estado -->
-    <div id="statusToast">Cargando mapa 3D fotorrealista...</div>
-
-    <!-- Retícula Central Táctica -->
+    <!-- Retícula Central Limpia (Sin indicadores numéricos) -->
     <div class="reticle-container">
       <div class="reticle-ring"></div>
       <div class="reticle-inner-dot"></div>
@@ -62,70 +61,43 @@
       <div class="reticle-line horizontal-right"></div>
       <div class="reticle-line vertical-top"></div>
       <div class="reticle-line vertical-bottom"></div>
-      <div id="reticlePitchBadge" class="reticle-pitch-badge">0°</div>
     </div>
 
-    <!-- Calibrador de Brújula (Alineación fina con cerros reales) -->
-    <div class="calibration-bar" id="calibrationBar">
-      <label for="headingOffsetRange">Calibrar Azimut:</label>
-      <input type="range" id="headingOffsetRange" min="-45" max="45" value="0" step="1">
-      <span class="calibration-val" id="headingOffsetVal">0°</span>
-    </div>
-
-    <!-- Tarjeta de Resultados de Telemetría -->
+    <!-- Panel de Telemetría Inferior (Ubicado abajo para despejar la vista) -->
     <div class="telemetry-card" id="telemetryCard">
-      <div class="telemetry-primary-grid">
-        <div class="telemetry-hero">
-          <span class="label">Distancia 3D</span>
-          <span class="val-big" id="resDirectDist">---</span>
+      <div class="telemetry-grid">
+        <div class="telemetry-item">
+          <span class="label">DISTANCIA</span>
+          <span class="val-highlight" id="resDirectDist">---</span>
         </div>
-        <div class="telemetry-stat">
-          <span class="label">Dist. Horiz.</span>
-          <span class="val" id="resHorizDist">---</span>
-        </div>
-        <div class="telemetry-stat">
-          <span class="label">Desnivel ΔH</span>
+        <div class="telemetry-item">
+          <span class="label">DESNIVEL</span>
           <span class="val" id="resDeltaH">---</span>
         </div>
-      </div>
-
-      <div class="telemetry-secondary-row">
-        <span>Rumbo: <strong id="resBearing">---</strong></span>
-        <span>Ángulo: <strong id="resAngle">---</strong></span>
-      </div>
-
-      <div class="telemetry-secondary-row">
-        <span>Destino: <strong id="resCoords">Toca un punto o dispara al centro</strong></span>
-      </div>
-
-      <div class="telemetry-firebase-status">
-        <span id="firebaseIndicator">●</span>
-        <span id="firebaseText">Telemetría conectada a Firebase RTDB</span>
+        <div class="telemetry-item">
+          <span class="label">AZIMUT</span>
+          <span class="val" id="resBearing">---</span>
+        </div>
+        <div class="telemetry-item utm-item">
+          <span class="label">UTM OBJETIVO</span>
+          <span class="val-mono" id="resUtm">Toca o mide al centro</span>
+        </div>
       </div>
     </div>
 
-    <!-- Barra de Acciones Inferior -->
+    <!-- Barra de Acciones Inferior Simplificada -->
     <footer class="hud-bottom-actions">
-      <button id="btnSensors" class="btn-tactical" title="Activar giroscopio y brújula">
-        🧭 SENSORES
-      </button>
-
-      <button id="btnMeasure" class="btn-tactical primary" title="Medir distancia al objetivo en la retícula central">
+      <button id="btnMeasure" class="btn-tactical primary" title="Medir al centro de la retícula">
         🎯 MEDIR
       </button>
-
-      <button id="btnFreeze" class="btn-tactical" title="Fijar orientación para apuntar">
-        ❄️ FIJAR
-      </button>
-
-      <button id="btnClear" class="btn-tactical" title="Limpiar objetivo">
+      <button id="btnClear" class="btn-tactical secondary" title="Limpiar objetivo medido">
         ✕
       </button>
     </footer>
 
   </div>
 
-  <!-- Scripts de la Aplicación -->
+  <!-- Scripts -->
   <script src="telemetryLogger.js"></script>
   <script src="geoMath.js"></script>
   <script src="sensorManager.js"></script>

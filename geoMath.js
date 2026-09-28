@@ -165,6 +165,110 @@
     return `${latStr}, ${lonStr}`;
   }
 
+  /**
+   * Convierte un ángulo en grados a milésimas artilleras OTAN (6400 milésimas por círculo completo)
+   */
+  function degreesToMils(deg) {
+    const normalized = normalizeAngle360(deg);
+    return Math.round((normalized * 6400) / 360) % 6400;
+  }
+
+  /**
+   * Formatea milésimas artilleras (ej. "1250 ₥")
+   */
+  function formatMils(mils) {
+    if (mils == null || isNaN(mils)) return '---';
+    return `${mils.toString().padStart(4, '0')} ₥`;
+  }
+
+  /**
+   * Convierte coordenadas geográficas WGS84 a proyección Universal Transversal de Mercator (UTM)
+   * @param {number} lat - Latitud decimal [-80, 84]
+   * @param {number} lon - Longitud decimal [-180, 180]
+   * @returns {{ zoneNumber: number, zoneLetter: string, easting: number, northing: number, formatted: string }}
+   */
+  function latLonToUTM(lat, lon) {
+    if (lat == null || lon == null || isNaN(lat) || isNaN(lon)) {
+      return { zoneNumber: 0, zoneLetter: '', easting: 0, northing: 0, formatted: '---' };
+    }
+
+    const a = 6378137.0; // Semieje mayor WGS84
+    const f = 1 / 298.257223563; // Aplanamiento
+    const e2 = f * (2 - f); // Excentricidad al cuadrado
+    const ep2 = e2 / (1 - e2); // Segunda excentricidad
+    const k0 = 0.9996; // Factor de escala central
+
+    // Zona UTM
+    let zoneNumber = Math.floor((lon + 180) / 6) + 1;
+    if (lat >= 56.0 && lat < 64.0 && lon >= 3.0 && lon < 12.0) zoneNumber = 32;
+    if (lat >= 72.0 && lat < 84.0) {
+      if (lon >= 0.0 && lon < 9.0) zoneNumber = 31;
+      else if (lon >= 9.0 && lon < 21.0) zoneNumber = 33;
+      else if (lon >= 21.0 && lon < 33.0) zoneNumber = 35;
+      else if (lon >= 33.0 && lon < 42.0) zoneNumber = 37;
+    }
+
+    // Banda de latitud (MGRS)
+    const letters = 'CDEFGHJKLMNPQRSTUVWX';
+    let zoneLetter = 'Z';
+    if (lat >= -80 && lat <= 84) {
+      zoneLetter = letters[Math.floor((lat + 80) / 8)];
+    }
+
+    const lon0 = ((zoneNumber - 1) * 6 - 180 + 3) * (Math.PI / 180);
+    const phi = lat * (Math.PI / 180);
+    const lambda = lon * (Math.PI / 180);
+
+    const sinPhi = Math.sin(phi);
+    const cosPhi = Math.cos(phi);
+    const tanPhi = Math.tan(phi);
+
+    const N = a / Math.sqrt(1 - e2 * sinPhi * sinPhi);
+    const T = tanPhi * tanPhi;
+    const C = ep2 * cosPhi * cosPhi;
+    const A = cosPhi * (lambda - lon0);
+
+    const e4 = e2 * e2;
+    const e6 = e4 * e2;
+    const M = a * (
+      (1 - e2 / 4 - 3 * e4 / 64 - 5 * e6 / 256) * phi
+      - (3 * e2 / 8 + 3 * e4 / 32 + 45 * e6 / 1024) * Math.sin(2 * phi)
+      + (15 * e4 / 256 + 45 * e6 / 1024) * Math.sin(4 * phi)
+      - (35 * e6 / 3072) * Math.sin(6 * phi)
+    );
+
+    const easting = k0 * N * (
+      A
+      + (1 - T + C) * Math.pow(A, 3) / 6
+      + (5 - 18 * T + T * T + 72 * C - 58 * ep2) * Math.pow(A, 5) / 120
+    ) + 500000.0;
+
+    let northing = k0 * (
+      M
+      + N * tanPhi * (
+        A * A / 2
+        + (5 - T + 9 * C + 4 * C * C) * Math.pow(A, 4) / 24
+        + (61 - 58 * T + T * T + 600 * C - 330 * ep2) * Math.pow(A, 6) / 720
+      )
+    );
+
+    if (lat < 0) {
+      northing += 10000000.0; // Falso norte para hemisferio sur
+    }
+
+    const roundedE = Math.round(easting);
+    const roundedN = Math.round(northing);
+    const formatted = `${zoneNumber}${zoneLetter} ${roundedE}E ${roundedN}N`;
+
+    return {
+      zoneNumber,
+      zoneLetter,
+      easting: roundedE,
+      northing: roundedN,
+      formatted
+    };
+  }
+
   return {
     EARTH_RADIUS_METERS,
     toRad,
@@ -177,6 +281,9 @@
     destinationPoint,
     geodeticToLocalENU,
     formatDistance,
-    formatCoords
+    formatCoords,
+    degreesToMils,
+    formatMils,
+    latLonToUTM
   };
 });

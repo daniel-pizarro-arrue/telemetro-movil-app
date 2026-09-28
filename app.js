@@ -1,5 +1,5 @@
 /**
- * app.js - Orquestador principal del Telémetro Móvil 3D
+ * app.js - Orquestador limpio del Telémetro Móvil 3D
  * Conecta Cesium3DMap, SensorManager, GeoMath y TelemetryLogger.
  */
 
@@ -8,31 +8,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ─── ELEMENTOS DOM ────────────────────────────────────────────────────────
   const statusToast = document.getElementById('statusToast');
-  const gpsStatusChip = document.getElementById('gpsStatusChip');
+  const gpsDot = document.getElementById('gpsDot');
   const modeToggleBtn = document.getElementById('modeToggleBtn');
-  const compassHeading = document.getElementById('compassHeading');
-  const compassPitch = document.getElementById('compassPitch');
+  const compassHeadingMils = document.getElementById('compassHeadingMils');
   const compassCardinal = document.getElementById('compassCardinal');
-  const reticlePitchBadge = document.getElementById('reticlePitchBadge');
-  const headingOffsetRange = document.getElementById('headingOffsetRange');
-  const headingOffsetVal = document.getElementById('headingOffsetVal');
 
   const resDirectDist = document.getElementById('resDirectDist');
-  const resHorizDist = document.getElementById('resHorizDist');
   const resDeltaH = document.getElementById('resDeltaH');
   const resBearing = document.getElementById('resBearing');
-  const resAngle = document.getElementById('resAngle');
-  const resCoords = document.getElementById('resCoords');
-  const firebaseIndicator = document.getElementById('firebaseIndicator');
-  const firebaseText = document.getElementById('firebaseText');
+  const resUtm = document.getElementById('resUtm');
 
-  const btnSensors = document.getElementById('btnSensors');
   const btnMeasure = document.getElementById('btnMeasure');
-  const btnFreeze = document.getElementById('btnFreeze');
   const btnClear = document.getElementById('btnClear');
 
   let toastTimer = null;
-  function showToast(message, duration = 3000) {
+  function showToast(message, duration = 2500) {
     if (!statusToast) return;
     statusToast.textContent = message;
     statusToast.classList.add('visible');
@@ -48,14 +38,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     return cardinals[idx];
   }
 
-  // ─── 1. INICIALIZAR GESTOR DE SENSORES ────────────────────────────────────
+  // ─── 1. GESTOR DE SENSORES ───────────────────────────────────────────────
   const sensorMgr = new window.SensorManager();
 
   sensorMgr.onGpsUpdate = (gps) => {
-    const accStr = gps.accuracy ? `±${Math.round(gps.accuracy)}m` : '';
-    const altStr = gps.alt ? `Alt: ${Math.round(gps.alt)}m` : '';
-    gpsStatusChip.textContent = `GPS: ${accStr} ${altStr}`.trim();
-    gpsStatusChip.classList.add('active');
+    if (gpsDot) {
+      gpsDot.className = `gps-dot ${gps.status || 'yellow'}`;
+    }
 
     if (cesiumMap) {
       cesiumMap.updateUserPosition(gps.lat, gps.lng, gps.alt);
@@ -63,13 +52,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 
   sensorMgr.onOrientationUpdate = (ori) => {
-    const heading360 = Math.round(ori.heading);
-    const pitchVal = ori.pitch.toFixed(1);
+    const GeoMath = window.GeoMath;
+    const mils = GeoMath ? GeoMath.degreesToMils(ori.heading) : Math.round((ori.heading * 6400) / 360);
 
-    compassHeading.textContent = `${heading360.toString().padStart(3, '0')}°`;
-    compassCardinal.textContent = getCardinal(heading360);
-    compassPitch.textContent = `${pitchVal > 0 ? '+' : ''}${pitchVal}°`;
-    reticlePitchBadge.textContent = `${pitchVal > 0 ? '+' : ''}${Math.round(ori.pitch)}°`;
+    compassHeadingMils.textContent = GeoMath ? GeoMath.formatMils(mils) : `${mils} ₥`;
+    compassCardinal.textContent = getCardinal(ori.heading);
 
     if (cesiumMap) {
       cesiumMap.updateDeviceOrientation(ori.heading, ori.pitch, ori.roll);
@@ -77,10 +64,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 
   sensorMgr.onError = (err) => {
-    showToast(err, 4000);
+    showToast(err, 3500);
   };
 
-  // ─── 2. INICIALIZAR MAPA 3D CON GOOGLE 3D TILES ───────────────────────────
+  // ─── 2. MAPA 3D FOTORREALISTA ─────────────────────────────────────────────
   let cesiumMap = null;
 
   try {
@@ -91,7 +78,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     cesiumMap.onStatusChange = (msg) => {
-      showToast(msg, 3500);
+      showToast(msg, 3000);
     };
 
     cesiumMap.onTargetMeasured = (data) => {
@@ -101,31 +88,32 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     await cesiumMap.init();
   } catch (err) {
-    console.error('Error al inicializar mapa 3D:', err);
-    showToast(`Error 3D: ${err.message}`, 6000);
+    console.error('Error inicializando Cesium3DMap:', err);
+    showToast(`Error 3D: ${err.message}`, 5000);
   }
 
-  // Iniciar GPS automáticamente
+  // Iniciar GPS
   sensorMgr.startGps();
 
-  // ─── 3. CONTROL DE MEDICIONES Y TELEMETRÍA ────────────────────────────────
+  // ─── 3. TELEMETRÍA Y MEDICIÓN ────────────────────────────────────────────
   function renderMeasurementResults(data) {
     const GeoMath = window.GeoMath;
+
     const directStr = GeoMath ? GeoMath.formatDistance(data.directDistance) : `${Math.round(data.directDistance)} m`;
-    const horizStr = GeoMath ? GeoMath.formatDistance(data.horizDistance) : `${Math.round(data.horizDistance)} m`;
     const deltaSign = data.deltaElevation >= 0 ? '+' : '';
     const deltaStr = `${deltaSign}${Math.round(data.deltaElevation)} m`;
 
+    const mils = GeoMath ? GeoMath.degreesToMils(data.bearing) : Math.round((data.bearing * 6400) / 360);
+    const bearingStr = GeoMath ? GeoMath.formatMils(mils) : `${mils} ₥`;
+
     resDirectDist.textContent = directStr;
-    resHorizDist.textContent = horizStr;
     resDeltaH.textContent = deltaStr;
-    resBearing.textContent = `${Math.round(data.bearing)}° (${getCardinal(data.bearing)})`;
-    resAngle.textContent = `${data.elevAngle >= 0 ? '+' : ''}${data.elevAngle.toFixed(1)}°`;
+    resBearing.textContent = bearingStr;
 
-    const tgt = data.target;
-    resCoords.textContent = `${tgt.lat.toFixed(5)}°, ${tgt.lng.toFixed(5)}° (Cota: ${Math.round(tgt.alt)}m)`;
+    // Coordenadas UTM
+    const utmStr = data.target.utm || (GeoMath ? GeoMath.latLonToUTM(data.target.lat, data.target.lng).formatted : '---');
+    resUtm.textContent = utmStr;
 
-    // Efecto háptico sutil al medir
     if (navigator.vibrate) {
       navigator.vibrate([40, 30, 60]);
     }
@@ -133,15 +121,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   async function syncWithFirebase(data) {
     if (!window.TelemetryLogger) return;
-    firebaseIndicator.style.color = '#f59e0b';
-    firebaseText.textContent = 'Enviando a Firebase...';
+
+    const GeoMath = window.GeoMath;
+    const mils = GeoMath ? GeoMath.degreesToMils(data.bearing) : Math.round((data.bearing * 6400) / 360);
 
     const payload = {
       directDistanceMeters: data.directDistance,
       horizontalDistanceMeters: data.horizDistance,
       deltaElevationMeters: data.deltaElevation,
+      bearingMils: mils,
       bearingDegrees: data.bearing,
-      elevationAngleDegrees: data.elevAngle,
+      targetUtm: data.target.utm,
       userGps: {
         lat: data.user.lat,
         lng: data.user.lng,
@@ -152,54 +142,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         lng: data.target.lng,
         alt: data.target.alt
       },
-      compassOffset: cesiumMap ? cesiumMap.headingOffset : 0,
       viewMode: cesiumMap ? cesiumMap.viewMode : 'sensor'
     };
 
-    const ok = await window.TelemetryLogger.sendTelemetry(payload);
-    if (ok) {
-      firebaseIndicator.style.color = '#10b981';
-      firebaseText.textContent = 'Sincronizado con Firebase RTDB';
-    } else {
-      firebaseIndicator.style.color = '#ef4444';
-      firebaseText.textContent = 'Error al enviar telemetría';
-    }
+    window.TelemetryLogger.sendTelemetry(payload);
   }
 
-  // ─── 4. INTERACCIÓN DE BOTONES Y CONTROLES ─────────────────────────────────
+  // ─── 4. CONTROLES DE LA INTERFAZ ──────────────────────────────────────────
 
-  // Botón Medir
-  btnMeasure.addEventListener('click', () => {
+  // Botón Medir al centro
+  btnMeasure.addEventListener('click', async () => {
+    // Activar sensores si aún no lo están
+    await sensorMgr.startOrientation();
+
     if (!cesiumMap) return;
     const res = cesiumMap.measureCenterReticle();
     if (!res) {
-      showToast('Apunta hacia el terreno o edificio antes de medir');
-    }
-  });
-
-  // Botón Activar Sensores
-  btnSensors.addEventListener('click', async () => {
-    const ok = await sensorMgr.startOrientation();
-    if (ok) {
-      btnSensors.classList.add('active-toggle');
-      showToast('Sensores activados. Gira el teléfono.');
-    }
-  });
-
-  // Botón Congelar / Descongelar
-  let isFrozen = false;
-  btnFreeze.addEventListener('click', () => {
-    if (!cesiumMap) return;
-    isFrozen = !isFrozen;
-    cesiumMap.setFrozen(isFrozen);
-    if (isFrozen) {
-      btnFreeze.classList.add('active-toggle');
-      btnFreeze.innerHTML = '▶️ SEGUIR';
-      showToast('Vista fijada para medición precisa.');
-    } else {
-      btnFreeze.classList.remove('active-toggle');
-      btnFreeze.innerHTML = '❄️ FIJAR';
-      showToast('Siguiendo sensores en tiempo real.');
+      showToast('Apunta hacia el terreno o edificio para medir');
     }
   });
 
@@ -208,49 +167,38 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!cesiumMap) return;
     cesiumMap.clearTarget();
     resDirectDist.textContent = '---';
-    resHorizDist.textContent = '---';
     resDeltaH.textContent = '---';
     resBearing.textContent = '---';
-    resAngle.textContent = '---';
-    resCoords.textContent = 'Toca un punto o dispara al centro';
+    resUtm.textContent = 'Toca o mide al centro';
     showToast('Objetivo limpiado');
   });
 
-  // Alternar Modo Brújula vs Navegación Libre
-  let currentMode = 'sensor';
-  modeToggleBtn.addEventListener('click', () => {
+  // Botón de Modo (Icono Brújula vs Modo Libre)
+  let isSensorMode = true;
+  modeToggleBtn.addEventListener('click', async () => {
+    await sensorMgr.startOrientation();
+
     if (!cesiumMap) return;
-    if (currentMode === 'sensor') {
-      currentMode = 'free';
-      modeToggleBtn.textContent = 'MODO: LIBRE / TÁCTIL';
-      modeToggleBtn.classList.remove('active');
-      cesiumMap.setViewMode('free');
-      showToast('Modo libre activado: Arrastra y haz zoom con los dedos.');
-    } else {
-      currentMode = 'sensor';
-      modeToggleBtn.textContent = 'MODO: BRÚJULA';
+    isSensorMode = !isSensorMode;
+
+    if (isSensorMode) {
       modeToggleBtn.classList.add('active');
       cesiumMap.setViewMode('sensor');
-      showToast('Modo brújula activo: El mapa sigue tu teléfono.');
+      showToast('Brújula activada: Sigue tu orientación.');
+    } else {
+      modeToggleBtn.classList.remove('active');
+      cesiumMap.setViewMode('free');
+      showToast('Modo libre: Arrastra y haz zoom con los dedos.');
     }
   });
 
-  // Control deslizante de calibración de rumbo
-  headingOffsetRange.addEventListener('input', (e) => {
-    const offset = parseInt(e.target.value, 10);
-    headingOffsetVal.textContent = `${offset > 0 ? '+' : ''}${offset}°`;
-    if (cesiumMap) {
-      cesiumMap.setHeadingOffset(offset);
-    }
-  });
-
-  // Intentar iniciar orientación automáticamente al primer toque
-  const triggerSensorsOnGesture = async () => {
+  // Activar sensores al primer toque en cualquier parte de la pantalla
+  const activateSensorsOnGesture = async () => {
     await sensorMgr.startOrientation();
-    window.removeEventListener('touchstart', triggerSensorsOnGesture);
-    window.removeEventListener('click', triggerSensorsOnGesture);
+    window.removeEventListener('touchstart', activateSensorsOnGesture);
+    window.removeEventListener('click', activateSensorsOnGesture);
   };
-  window.addEventListener('touchstart', triggerSensorsOnGesture, { once: true });
-  window.addEventListener('click', triggerSensorsOnGesture, { once: true });
+  window.addEventListener('touchstart', activateSensorsOnGesture, { once: true });
+  window.addEventListener('click', activateSensorsOnGesture, { once: true });
 
 });

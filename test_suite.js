@@ -46,5 +46,22 @@ const calcDist = GeoMath.haversineDistance(0, 0, dest.lat, dest.lon);
 console.log(`Punto proyectado a 1000m: dist calculada = ${calcDist.toFixed(1)}m`);
 assert(Math.abs(calcDist - 1000) < 1.0, `Error en proyección de punto geodésico: ${calcDist}`);
 
+console.log('--- TEST MILS Y UTM ---');
+// Test 360 deg = 0 mils, 90 deg = 1600 mils, 180 deg = 3200 mils, 270 deg = 4800 mils
+assert.strictEqual(GeoMath.degreesToMils(0), 0);
+assert.strictEqual(GeoMath.degreesToMils(90), 1600);
+assert.strictEqual(GeoMath.degreesToMils(180), 3200);
+assert.strictEqual(GeoMath.degreesToMils(270), 4800);
+console.log(`90° = ${GeoMath.degreesToMils(90)} mils (esperado 1600)`);
+
+// Test UTM Santiago (-33.4489, -70.6693)
+const utm = GeoMath.latLonToUTM(-33.4489, -70.6693);
+console.log(`UTM Santiago: ${utm.formatted}`);
+assert.strictEqual(utm.zoneNumber, 19);
+assert.strictEqual(utm.zoneLetter, 'H');
+assert(utm.easting > 340000 && utm.easting < 350000, `Easting fuera de rango: ${utm.easting}`);
+assert(utm.northing > 6290000 && utm.northing < 6305000, `Northing fuera de rango: ${utm.northing}`);
+
 console.log('✅ TODOS LOS TESTS PASARON EXITOSAMENTE');
+
 
