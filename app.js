@@ -70,6 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnSvsZoomIn = document.getElementById('btn-svs-zoom-in');
   const btnSvsZoomOut = document.getElementById('btn-svs-zoom-out');
   const valSvsZoom = document.getElementById('val-svs-zoom');
+  const btnSvsMapStyle = document.getElementById('btn-svs-map-style');
   const btnSvsWireframe = document.getElementById('btn-svs-wireframe');
   const btnSvsReset = document.getElementById('btn-svs-reset');
   const svsStatusBanner = document.getElementById('svs-status-banner');
@@ -436,6 +437,23 @@ document.addEventListener('DOMContentLoaded', () => {
       Terrain3DView.zoomBy(1.1);
       svsZoomLevel = Math.max(0.5, Number((svsZoomLevel / 1.11).toFixed(1)));
       if (valSvsZoom) valSvsZoom.textContent = `${svsZoomLevel}x`;
+    });
+  }
+
+  // Alternar Estilo de Textura (Satélite Fotorrealista vs Topográfico)
+  if (btnSvsMapStyle) {
+    btnSvsMapStyle.addEventListener('click', () => {
+      if (typeof Terrain3DView === 'undefined') return;
+      const newMode = Terrain3DView.toggleVisualMode();
+      if (newMode === 'satellite') {
+        btnSvsMapStyle.textContent = '📸';
+        btnSvsMapStyle.title = 'Modo: Fotografía Satelital Realista (Google Earth / Esri)';
+        showToast('Textura: Fotografía Satelital Realista (Google Earth / Esri)', 3000);
+      } else {
+        btnSvsMapStyle.textContent = '🗺️';
+        btnSvsMapStyle.title = 'Modo: Relieve Topográfico Hipsométrico';
+        showToast('Textura: Relieve Topográfico Hipsométrico Militar', 3000);
+      }
     });
   }
 

@@ -58,6 +58,11 @@
     hasPosition: false
   };
 
+  // Modo visual de relieve: 'satellite' (fotorrealista estilo Google Earth / Esri) o 'topographic' (militar hipsométrico)
+  let currentVisualMode = 'satellite';
+  let satelliteTexture = null;
+  const satelliteImageCache = new Map();
+
   // Cache de tiles de elevación decodificadas: clave "z/x/y" -> Float32Array (256x256)
   const tileElevationCache = new Map();
   let isMeshLoading = false;
@@ -224,6 +229,45 @@
   }
 
   // ==========================================================
+  // CARGA DE FOTOGRAFÍA SATELITAL FOTORREALISTA (ESRI WORLD IMAGERY)
+  // ==========================================================
+
+  async function loadTileSatelliteImage(z, x, y) {
+    const key = `${z}/${x}/${y}`;
+    if (satelliteImageCache.has(key)) {
+      return satelliteImageCache.get(key);
+    }
+
+    if (typeof Image === 'undefined') {
+      return null;
+    }
+
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      // URL de mosaico satelital global de alta definición (abierto y sin API Key)
+      const url = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`;
+
+      const timeoutId = setTimeout(() => {
+        resolve(null);
+      }, 6000);
+
+      img.onload = () => {
+        clearTimeout(timeoutId);
+        satelliteImageCache.set(key, img);
+        resolve(img);
+      };
+
+      img.onerror = () => {
+        clearTimeout(timeoutId);
+        resolve(null);
+      };
+
+      img.src = url;
+    });
+  }
+
+  // ==========================================================
   // GENERACIÓN DE MALLA TOPOGRÁFICA 3D Y MATERIAL TÁCTICO
   // ==========================================================
 
@@ -252,13 +296,29 @@
       const centerTileX = Math.floor(centerFrac.x);
       const centerTileY = Math.floor(centerFrac.y);
 
+      const minTileX = centerTileX - 1;
+      const maxTileX = centerTileX + 2; // exclusivo
+      const minTileY = centerTileY - 1;
+      const maxTileY = centerTileY + 2; // exclusivo
+
+      // Esquinas geodésicas extremas del bloque 3x3 para proyección UV exacta
+      const nw = tileToLatLon(minTileX, minTileY, TILE_ZOOM);
+      const se = tileToLatLon(maxTileX, maxTileY, TILE_ZOOM);
+
       const tilePromises = [];
-      for (let dx = -1; dx <= 1; dx++) {
-        for (let dy = -1; dy <= 1; dy++) {
-          tilePromises.push(loadTileElevation(TILE_ZOOM, centerTileX + dx, centerTileY + dy));
+      const satPromises = [];
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const tx = centerTileX + dx;
+          const ty = centerTileY + dy;
+          tilePromises.push(loadTileElevation(TILE_ZOOM, tx, ty));
+          satPromises.push(loadTileSatelliteImage(TILE_ZOOM, tx, ty));
         }
       }
-      await Promise.all(tilePromises);
+      const [elevResults, satImages] = await Promise.all([
+        Promise.all(tilePromises),
+        Promise.all(satPromises)
+      ]);
 
       // Si no tenemos cota del observador calibrada, muestrearla del centro
       const sampledCenterAlt = sampleElevationFromTiles(obsLat, obsLon);
@@ -267,7 +327,42 @@
         observer.groundAlt = sampledCenterAlt;
       }
 
-      // 2. Crear Geometría de Plano (XZ)
+      // 2. Componer la textura satelital 3x3 (768x768)
+      if (typeof document !== 'undefined') {
+        try {
+          const satCanvas = document.createElement('canvas');
+          satCanvas.width = 3 * 256;
+          satCanvas.height = 3 * 256;
+          const satCtx = satCanvas.getContext('2d');
+
+          // Fondo neutro tierra/montaña
+          satCtx.fillStyle = '#223028';
+          satCtx.fillRect(0, 0, satCanvas.width, satCanvas.height);
+
+          let satIdx = 0;
+          for (let dy = 0; dy < 3; dy++) {
+            for (let dx = 0; dx < 3; dx++) {
+              const img = satImages[satIdx++];
+              if (img) {
+                satCtx.drawImage(img, dx * 256, dy * 256, 256, 256);
+              }
+            }
+          }
+
+          if (satelliteTexture) {
+            satelliteTexture.dispose();
+          }
+          satelliteTexture = new THREE.CanvasTexture(satCanvas);
+          satelliteTexture.minFilter = THREE.LinearFilter;
+          satelliteTexture.magFilter = THREE.LinearFilter;
+          satelliteTexture.wrapS = THREE.ClampToEdgeWrapping;
+          satelliteTexture.wrapT = THREE.ClampToEdgeWrapping;
+        } catch (texErr) {
+          console.warn('Error componiendo textura satelital:', texErr);
+        }
+      }
+
+      // 3. Crear Geometría de Plano (XZ)
       const geometry = new THREE.PlaneGeometry(
         TERRAIN_SIZE_METERS,
         TERRAIN_SIZE_METERS,
@@ -278,6 +373,7 @@
       geometry.rotateX(-Math.PI / 2);
 
       const posAttr = geometry.attributes.position;
+      const uvAttr = geometry.attributes.uv;
       const count = posAttr.count;
       const colors = new Float32Array(count * 3);
 
@@ -299,7 +395,12 @@
         const relY = vertexAlt - obsAlt;
         posAttr.setY(i, relY);
 
-        // Asignar color hipsométrico según altitud absoluta
+        // Mapeo UV geodésico exacto a la fotografía satelital de 3x3 tiles
+        const u = (geo.lon - nw.lon) / (se.lon - nw.lon);
+        const v = (geo.lat - se.lat) / (nw.lat - se.lat);
+        uvAttr.setXY(i, Math.max(0.0, Math.min(1.0, u)), Math.max(0.0, Math.min(1.0, v)));
+
+        // Color hipsométrico de respaldo para modo topográfico
         const col = getElevationColor(vertexAlt);
         colors[i * 3] = col.r;
         colors[i * 3 + 1] = col.g;
@@ -309,14 +410,16 @@
       geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
       geometry.computeVertexNormals();
 
-      // 3. Crear o reemplazar la malla sólida sombreada
+      // 4. Crear o reemplazar la malla del terreno
       if (terrainMesh) {
         scene.remove(terrainMesh);
         terrainMesh.geometry.dispose();
       }
 
+      const useSat = currentVisualMode === 'satellite' && satelliteTexture !== null;
       const terrainMaterial = new THREE.MeshLambertMaterial({
-        vertexColors: true,
+        map: useSat ? satelliteTexture : null,
+        vertexColors: !useSat,
         transparent: true,
         opacity: currentOpacity,
         wireframe: false,
@@ -328,7 +431,7 @@
       terrainMesh.name = 'TerrainSolidMesh';
       scene.add(terrainMesh);
 
-      // 4. Crear o reemplazar la malla de contorno wireframe (para máxima claridad de silueta)
+      // 5. Crear o reemplazar la malla de contorno wireframe (para silueta)
       if (wireframeMesh) {
         scene.remove(wireframeMesh);
         wireframeMesh.geometry.dispose();
@@ -338,7 +441,7 @@
         color: 0x00f2fe, // Cyan táctico para silueta de crestas
         wireframe: true,
         transparent: true,
-        opacity: Math.min(1.0, currentOpacity * 0.75)
+        opacity: Math.min(1.0, currentOpacity * 0.40) // Más sutil para destacar la foto satelital
       });
 
       wireframeMesh = new THREE.Mesh(geometry, wireframeMaterial);
@@ -347,12 +450,33 @@
       scene.add(wireframeMesh);
 
       lastLoadedCoords = { lat: obsLat, lon: obsLon };
-      console.log('Malla 3D DEM generada con éxito:', count, 'vértices');
+      console.log('Malla 3D Fotorrealista generada:', count, 'vértices | Modo:', currentVisualMode);
     } catch (e) {
       console.error('Error generando malla de terreno 3D:', e);
     } finally {
       isMeshLoading = false;
     }
+  }
+
+  function setVisualMode(mode) {
+    if (mode !== 'satellite' && mode !== 'topographic') return;
+    currentVisualMode = mode;
+    if (terrainMesh && terrainMesh.material) {
+      const useSat = currentVisualMode === 'satellite' && satelliteTexture !== null;
+      terrainMesh.material.map = useSat ? satelliteTexture : null;
+      terrainMesh.material.vertexColors = !useSat;
+      terrainMesh.material.needsUpdate = true;
+    }
+  }
+
+  function getVisualMode() {
+    return currentVisualMode;
+  }
+
+  function toggleVisualMode() {
+    const newMode = currentVisualMode === 'satellite' ? 'topographic' : 'satellite';
+    setVisualMode(newMode);
+    return newMode;
   }
 
   // ==========================================================
@@ -761,6 +885,9 @@
     resetCalibration,
     raycastTap: handleTapToMeasure,
     onTargetSelected,
+    setVisualMode,
+    getVisualMode,
+    toggleVisualMode,
     getStatus,
     // Métodos utilitarios expuestos para tests
     latLonToTileFraction,
