@@ -46,6 +46,18 @@ const calcDist = GeoMath.haversineDistance(0, 0, dest.lat, dest.lon);
 console.log(`Punto proyectado a 1000m: dist calculada = ${calcDist.toFixed(1)}m`);
 assert(Math.abs(calcDist - 1000) < 1.0, `Error en proyección de punto geodésico: ${calcDist}`);
 
+// Test GPS locking behavior
+let gpsLockedCalled = false;
+sm.onGpsLocked = (lockedGps) => {
+  gpsLockedCalled = true;
+  assert.strictEqual(lockedGps.status, 'connected');
+  assert.strictEqual(lockedGps.accuracy, 12);
+};
+sm._lockGps({ lat: -33.45, lng: -70.67, alt: 580, accuracy: 12, timestamp: Date.now() });
+assert.strictEqual(gpsLockedCalled, true);
+assert.strictEqual(sm.isGpsLocked, true);
+console.log('GPS Lock Unit Test: Bloqueo exitoso verificado');
+
 console.log('--- TEST MILS Y UTM ---');
 // Test 360 deg = 0 mils, 90 deg = 1600 mils, 180 deg = 3200 mils, 270 deg = 4800 mils
 assert.strictEqual(GeoMath.degreesToMils(0), 0);

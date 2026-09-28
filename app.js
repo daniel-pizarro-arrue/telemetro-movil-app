@@ -7,7 +7,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ─── ELEMENTOS DOM ────────────────────────────────────────────────────────
   const statusToast = document.getElementById('statusToast');
+  const gpsBadge = document.getElementById('gpsBadge');
   const gpsDot = document.getElementById('gpsDot');
+  const gpsText = document.getElementById('gpsText');
 
   const compassRibbon = document.getElementById('compassRibbon');
   const compassHeadingMils = document.getElementById('compassHeadingMils');
@@ -47,6 +49,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     const cardinals = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSO', 'SO', 'OSO', 'O', 'ONO', 'NO', 'NNO'];
     const idx = Math.round(deg / 22.5) % 16;
     return cardinals[idx];
+  }
+
+  function updateGpsUI(status, customLabel) {
+    const st = status || 'connecting';
+    const colorClass = st === 'connected' ? 'green' : (st === 'disconnected' ? 'red' : 'yellow');
+
+    if (gpsBadge) {
+      gpsBadge.className = `gps-badge ${colorClass}`;
+    }
+    if (gpsDot) {
+      gpsDot.className = `gps-dot ${colorClass}`;
+    }
+    if (gpsText) {
+      if (customLabel) {
+        gpsText.textContent = customLabel;
+      } else if (st === 'connected') {
+        gpsText.textContent = 'GPS FIJADO';
+      } else if (st === 'disconnected') {
+        gpsText.textContent = 'SIN GPS';
+      } else {
+        gpsText.textContent = 'BUSCANDO...';
+      }
+    }
   }
 
   // ─── POSTURAS DEL OBSERVADOR ──────────────────────────────────────────────
@@ -102,19 +127,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   const sensorMgr = new window.SensorManager();
 
   sensorMgr.onGpsUpdate = (gps) => {
-    // Actualizar color del indicador (rojo, amarillo, verde)
-    if (gpsDot) {
-      gpsDot.className = `gps-dot ${gps.status || 'yellow'}`;
-    }
+    updateGpsUI(gps.status);
+  };
 
-    // Cuando el GPS logra precisión actual por primera vez y el usuario aún no confirma:
-    if (!hasConfirmedLocation && !hasGpsFlown && gps.status === 'connected') {
+  // Se activa exactamente UNA vez cuando se tiene certeza de las coordenadas reales:
+  sensorMgr.onGpsLocked = (finalGps) => {
+    updateGpsUI('connected', 'GPS FIJADO');
+    showToast(`📍 Posición confirmada (±${Math.round(finalGps.accuracy)}m). Volando a tu ubicación...`, 3000);
+
+    // Vuelo aéreo cenital único a la posición del usuario:
+    if (cesiumMap && !hasConfirmedLocation && !hasGpsFlown) {
       hasGpsFlown = true;
-      showToast('Ubicación GPS detectada. Volando a tu posición...', 2500);
-      if (cesiumMap) {
-        // Vuelo aéreo cenital sobre la posición del usuario
-        cesiumMap.setAerialView(gps.lat, gps.lng, 600, true);
-      }
+      cesiumMap.setAerialView(finalGps.lat, finalGps.lng, 600, true);
     }
   };
 
