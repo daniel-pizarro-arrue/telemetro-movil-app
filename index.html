@@ -12,9 +12,10 @@
 </head>
 <body>
   <div class="hud-app">
-    <!-- Capa de video de la cámara trasera -->
+    <!-- Capa de video de la cámara trasera y Visión Sintética 3D -->
     <div class="camera-viewport">
       <video id="camera-stream" autoplay playsinline muted></video>
+      <canvas id="svs-canvas"></canvas>
       <div class="camera-placeholder" id="camera-placeholder">
         <div class="placeholder-icon">📷</div>
         <p>Cámara no iniciada</p>
@@ -42,6 +43,12 @@
         </div>
 
         <div class="hud-quick-stats">
+          <!-- Conmutador de Modos: Láser vs 3D AR -->
+          <div class="mode-toggle-group" id="mode-selector">
+            <button class="mode-pill-btn active" id="btn-mode-laser" data-mode="laser">🎯 Láser</button>
+            <button class="mode-pill-btn" id="btn-mode-svs" data-mode="svs">🌐 3D AR</button>
+          </div>
+
           <div class="stat-pill" title="Azimut Geográfico Verdadero (Milésimas)">
             <span class="stat-lbl">AZ V:</span>
             <span class="stat-val font-mono" id="hud-azimuth">00-00 ₥</span>
@@ -61,6 +68,36 @@
           <button class="stat-pill btn-fullscreen" id="btn-fullscreen" title="Modo Pantalla Completa">⛶</button>
         </div>
       </header>
+
+      <!-- Barra de Calibración Táctica 3D AR (Activa en Modo 3D AR) -->
+      <div class="svs-toolbar" id="svs-toolbar" style="display: none;">
+        <div class="svs-toolbar-row">
+          <button class="svs-btn" id="btn-svs-freeze" title="Fijar el mapa 3D para alinear con la cámara real">
+            <span class="svs-btn-icon" id="svs-freeze-icon">🔓</span>
+            <span class="svs-btn-text" id="svs-freeze-text">Fijar Mapa</span>
+          </button>
+          
+          <div class="svs-slider-group" title="Transparencia del Mapa 3D">
+            <span class="svs-slider-lbl">Alfa:</span>
+            <input type="range" id="slider-svs-opacity" min="10" max="100" value="70" class="svs-range">
+            <span class="svs-slider-val font-mono" id="val-svs-opacity">70%</span>
+          </div>
+
+          <div class="svs-zoom-group">
+            <button class="svs-btn-icon-only" id="btn-svs-zoom-out" title="Alejar Zoom">-</button>
+            <span class="svs-zoom-lbl font-mono" id="val-svs-zoom">1.0x</span>
+            <button class="svs-btn-icon-only" id="btn-svs-zoom-in" title="Acercar Zoom">+</button>
+          </div>
+
+          <button class="svs-btn-icon-only" id="btn-svs-wireframe" title="Alternar Malla de Contorno">🕸️</button>
+          <button class="svs-btn-icon-only" id="btn-svs-reset" title="Restablecer Calibración">↺</button>
+        </div>
+
+        <div class="svs-status-banner" id="svs-status-banner">
+          <span class="svs-banner-dot"></span>
+          <span id="svs-banner-text">Mueva el teléfono hacia el cerro o toque un punto para medir</span>
+        </div>
+      </div>
 
       <!-- Retícula Táctica Central (Crosshair Militar Mil-Dot) -->
       <div class="hud-reticle">
@@ -246,6 +283,8 @@
     <div class="toast-notification" id="toast-msg"></div>
   </div>
 
+  <script src="three.min.js"></script>
+  <script src="terrain3DView.js"></script>
   <script src="terrainEngine.js"></script>
   <script src="sensorFusion.js"></script>
   <script src="telemetryLogger.js"></script>

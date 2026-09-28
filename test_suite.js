@@ -90,7 +90,35 @@ async function runTests() {
 
   const rollLandTilt = projectGravityRoll(9.8 * Math.cos(10 * Math.PI / 180), -9.8 * Math.sin(10 * Math.PI / 180), 90);
   assert(Math.abs(rollLandTilt - 10) < 0.01, `Inclinación lateral en Landscape falló: ${rollLandTilt}°`);
-  console.log('✔ Inclinación lateral en Landscape (+10.0°): OK');
+  console.log('\n=== [4] VALIDACIÓN DEL MOTOR 3D AR Y VISIÓN SINTÉTICA (TERRAIN3DVIEW) ===');
+  const Terrain3DView = require('./terrain3DView.js');
+
+  // Test 4.1: Decodificación de Cota DEM Terrarium
+  const testElev = Terrain3DView.decodeTerrarium(128, 145, 0);
+  assert(Math.abs(testElev - 145) < 0.01, `Decodificación Terrarium falló: esperado 145m, obtenido ${testElev}m`);
+  console.log('✔ Decodificación DEM Terrarium (r, g, b -> metros): OK (145.0m)');
+
+  // Test 4.2: Conversión Geodésica Round-trip (Metros locales <-> Lat/Lon)
+  const obsLat = -33.5836433, obsLon = -70.7019017, obsAlt = 561.6;
+  const targetLat = -33.5650, targetLon = -70.6800;
+  const localMeters = Terrain3DView.latLonToLocalMeters(targetLat, targetLon, obsLat, obsLon);
+  const reconLatLon = Terrain3DView.localMetersToLatLon(localMeters.x, localMeters.z, obsLat, obsLon);
+  assert(Math.abs(reconLatLon.lat - targetLat) < 1e-6, 'Error en roundtrip latitud geodésica');
+  assert(Math.abs(reconLatLon.lon - targetLon) < 1e-6, 'Error en roundtrip longitud geodésica');
+  console.log(`✔ Conversión Geodésica Bidireccional: OK (Error < 10^-6 grados)`);
+
+  // Test 4.3: Telemetría de Impacto 3D por Toque
+  const simulatedHit = { x: localMeters.x, y: 320.0, z: localMeters.z };
+  const targetMetrics = Terrain3DView.calculateTargetMetrics(simulatedHit, obsLat, obsLon, obsAlt, 1.6);
+  assert(targetMetrics.slantRange > 2500 && targetMetrics.slantRange < 3500, `Rango inesperado: ${targetMetrics.slantRange}m`);
+  assert(targetMetrics.targetCoords.lat === targetLat, `Latitud de blanco no coincide`);
+  assert(targetMetrics.targetCoords.alt === Math.round(obsAlt + (320.0 - 1.6)), `Altitud de blanco incorrecta`);
+  console.log(`✔ Telemetría por Toque Directo: Slant=${targetMetrics.slantRange}m, Horiz=${targetMetrics.horizontalDistance}m, Cota Blanco=${targetMetrics.targetCoords.alt}m MSL`);
+
+  // Test 4.4: Mapeo de Tiles Terrarium a Coordenadas
+  const tileCoord = Terrain3DView.latLonToTileFraction(obsLat, obsLon, 12);
+  assert(Math.floor(tileCoord.x) === 1243 && Math.floor(tileCoord.y) === 2454, 'Mapeo de tile zoom 12 incorrecto');
+  console.log(`✔ Mapeo de Tile Copernicus/Terrarium: Zoom 12 (X: ${Math.floor(tileCoord.x)}, Y: ${Math.floor(tileCoord.y)}) OK`);
 
   console.log('\n======================================================');
   console.log('   TODAS LAS PRUEBAS UNITARIAS PASARON EXITOSAMENTE   ');

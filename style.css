@@ -87,6 +87,22 @@ footer:has(a[href*="netlify.com"]) {
   display: block;
 }
 
+/* Canvas Three.js WebGL para Visión Sintética 3D y Calibración AR */
+#svs-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  pointer-events: none;
+  display: block;
+  touch-action: none;
+}
+
+body.mode-svs #svs-canvas {
+  pointer-events: auto;
+}
+
 .camera-placeholder {
   position: absolute;
   inset: 0;
@@ -110,7 +126,7 @@ footer:has(a[href*="netlify.com"]) {
 .hud-overlay {
   position: absolute;
   inset: 0;
-  z-index: 2;
+  z-index: 3;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -118,8 +134,25 @@ footer:has(a[href*="netlify.com"]) {
   pointer-events: none;
 }
 
-.hud-overlay * {
+/* Solo los controles interactivos capturan toques; el área de visor pasa directo al canvas */
+.hud-overlay button,
+.hud-overlay input,
+.hud-overlay .pill-btn,
+.hud-overlay .stat-pill,
+.hud-overlay .mode-toggle-group,
+.hud-overlay .svs-toolbar,
+.hud-overlay .btn-laser-trigger,
+.hud-overlay .sheet-handle,
+.hud-overlay .sheet-header button {
   pointer-events: auto;
+}
+
+.hud-reticle,
+.hud-reticle *,
+.artificial-horizon,
+.pitch-ladder,
+.compass-tape-container {
+  pointer-events: none !important;
 }
 
 /* Barra Superior: Brújula y Stats Rápidos */
@@ -195,6 +228,235 @@ footer:has(a[href*="netlify.com"]) {
   font-size: 0.85rem;
   font-weight: 700;
   color: var(--hud-cyan);
+}
+
+/* ==========================================================
+   CONMUTADOR DE MODOS: LÁSER vs 3D AR
+   ========================================================== */
+.mode-toggle-group {
+  display: flex;
+  gap: 0.25rem;
+  background: rgba(10, 15, 25, 0.85);
+  border: 1px solid var(--hud-border);
+  padding: 0.15rem;
+  border-radius: 9999px;
+  backdrop-filter: blur(8px);
+}
+
+.mode-pill-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--font-main);
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.25rem 0.65rem;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+}
+
+.mode-pill-btn.active {
+  background: var(--hud-cyan);
+  color: #05070a;
+  box-shadow: 0 0 10px rgba(0, 242, 254, 0.45);
+}
+
+/* ==========================================================
+   BARRA DE CALIBRACIÓN TÁCTICA 3D AR (SVS TOOLBAR)
+   ========================================================== */
+.svs-toolbar {
+  position: absolute;
+  top: max(4.6rem, env(safe-area-inset-top, 4.6rem));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  width: min(94%, 480px);
+  pointer-events: auto;
+  animation: fadeInSvs 0.25s ease-out;
+}
+
+@keyframes fadeInSvs {
+  from { opacity: 0; transform: translate(-50%, -8px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.svs-toolbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  background: rgba(10, 15, 25, 0.90);
+  border: 1px solid var(--hud-border);
+  padding: 0.35rem 0.6rem;
+  border-radius: 12px;
+  backdrop-filter: blur(12px);
+  width: 100%;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.65);
+}
+
+.svs-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(0, 242, 254, 0.12);
+  border: 1px solid var(--hud-cyan);
+  color: var(--hud-cyan);
+  font-family: var(--font-main);
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.3rem 0.6rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.svs-btn.frozen {
+  background: rgba(255, 183, 3, 0.22);
+  border-color: var(--hud-amber);
+  color: var(--hud-amber);
+  box-shadow: 0 0 12px rgba(255, 183, 3, 0.4);
+  animation: pulseFreeze 1.8s infinite;
+}
+
+@keyframes pulseFreeze {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+  100% { transform: scale(1); }
+}
+
+.svs-slider-group {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 1;
+  min-width: 85px;
+}
+
+.svs-slider-lbl {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.svs-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.2);
+  outline: none;
+}
+
+.svs-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--hud-cyan);
+  cursor: pointer;
+  box-shadow: 0 0 6px var(--hud-cyan);
+}
+
+.svs-slider-val {
+  font-size: 0.68rem;
+  color: var(--hud-cyan);
+  min-width: 26px;
+  text-align: right;
+}
+
+.svs-zoom-group {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  padding: 0.1rem 0.25rem;
+}
+
+.svs-zoom-lbl {
+  font-size: 0.68rem;
+  color: #fff;
+  min-width: 28px;
+  text-align: center;
+}
+
+.svs-btn-icon-only {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.svs-btn-icon-only:active {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.svs-status-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(10, 15, 25, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 0.22rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.66rem;
+  color: var(--text-muted);
+  backdrop-filter: blur(8px);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.svs-status-banner.calibrating {
+  border-color: var(--hud-amber);
+  color: var(--hud-amber);
+}
+
+.svs-banner-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--hud-green);
+  flex-shrink: 0;
+}
+
+.svs-status-banner.calibrating .svs-banner-dot {
+  background: var(--hud-amber);
+  box-shadow: 0 0 6px var(--hud-amber);
+  animation: pulseFreeze 1.2s infinite;
+}
+
+/* Modificaciones visuales en Modo 3D AR */
+body.mode-svs .hud-reticle {
+  opacity: 0.45;
+  transition: opacity 0.3s;
+}
+
+body.mode-svs .reticle-dot.center-pip {
+  opacity: 0.8;
+  box-shadow: 0 0 8px var(--hud-cyan);
 }
 
 /* ==========================================================
@@ -832,6 +1094,28 @@ footer:has(a[href*="netlify.com"]) {
 
   .stat-val {
     font-size: 0.68rem;
+  }
+
+  /* Barra SVS AR en modo horizontal */
+  .svs-toolbar {
+    top: 34px;
+    width: min(65vw, 440px);
+    gap: 0.2rem;
+  }
+
+  .svs-toolbar-row {
+    padding: 0.2rem 0.45rem;
+    gap: 0.25rem;
+  }
+
+  .svs-btn {
+    font-size: 0.64rem;
+    padding: 0.2rem 0.45rem;
+  }
+
+  .svs-status-banner {
+    font-size: 0.6rem;
+    padding: 0.12rem 0.5rem;
   }
 
   /* Retícula Central Centrada en el visor panorámico */

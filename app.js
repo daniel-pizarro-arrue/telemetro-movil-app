@@ -57,6 +57,24 @@ document.addEventListener('DOMContentLoaded', () => {
   const terrainCanvas = document.getElementById('terrain-canvas');
   const toastMsg = document.getElementById('toast-msg');
 
+  // Elementos del Motor 3D AR y Visión Sintética
+  const svsCanvas = document.getElementById('svs-canvas');
+  const btnModeLaser = document.getElementById('btn-mode-laser');
+  const btnModeSvs = document.getElementById('btn-mode-svs');
+  const svsToolbar = document.getElementById('svs-toolbar');
+  const btnSvsFreeze = document.getElementById('btn-svs-freeze');
+  const svsFreezeIcon = document.getElementById('svs-freeze-icon');
+  const svsFreezeText = document.getElementById('svs-freeze-text');
+  const sliderSvsOpacity = document.getElementById('slider-svs-opacity');
+  const valSvsOpacity = document.getElementById('val-svs-opacity');
+  const btnSvsZoomIn = document.getElementById('btn-svs-zoom-in');
+  const btnSvsZoomOut = document.getElementById('btn-svs-zoom-out');
+  const valSvsZoom = document.getElementById('val-svs-zoom');
+  const btnSvsWireframe = document.getElementById('btn-svs-wireframe');
+  const btnSvsReset = document.getElementById('btn-svs-reset');
+  const svsStatusBanner = document.getElementById('svs-status-banner');
+  const svsBannerText = document.getElementById('svs-banner-text');
+
   // Inicializar Gestor de Sensores (Milésimas 6400 y 1.60m de pie por defecto)
   const sensorMgr = new SensorFusion.SensorManager({
     postureHeight: 1.60,
@@ -64,6 +82,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   let currentAngleUnit = 'mils';
+  let activeOperatingMode = 'laser'; // 'laser' o 'svs'
+  let svsZoomLevel = 1.0;
   let lastHitCoords = null;
   let lastProfileData = null;
   let audioCtx = null;
@@ -144,6 +164,11 @@ document.addEventListener('DOMContentLoaded', () => {
           } else if (gps.gpsAlt !== null) {
             gpsTerrainAlt.textContent = `GPS: ${gps.gpsAlt}m`;
           }
+
+          // Sincronizar posición de observador con el motor 3D
+          if (typeof Terrain3DView !== 'undefined') {
+            Terrain3DView.updateObserverPosition(gps.lat, gps.lon, gps.groundAlt, sensorMgr.postureHeight);
+          }
         }
       });
     } catch (e) {
@@ -156,6 +181,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     sensorMgr.startOrientation((readings) => {
       latestHudReadings = readings;
+
+      // Actualizar cámara 3D de inmediato
+      if (typeof Terrain3DView !== 'undefined') {
+        Terrain3DView.updateOrientation(readings.azimuthTrue, readings.pitchDeg, readings.rollDeg);
+      }
 
       if (!hudFrameScheduled) {
         hudFrameScheduled = true;
@@ -200,6 +230,14 @@ document.addEventListener('DOMContentLoaded', () => {
       sensorMgr.setPostureHeight(h);
       if (sensorMgr.gps.groundAlt !== null) {
         gpsTerrainAlt.textContent = `DEM: ${sensorMgr.gps.groundAlt}m (+${h}m)`;
+      }
+      if (typeof Terrain3DView !== 'undefined') {
+        Terrain3DView.updateObserverPosition(
+          sensorMgr.gps.lat || -33.5888,
+          sensorMgr.gps.lon || -70.7064,
+          sensorMgr.gps.groundAlt || 485,
+          h
+        );
       }
       showToast(`Altura observador: ${h}m`);
     }
@@ -248,8 +286,190 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // ==========================================================
+  // MANEJADOR DE IMPACTO POR TOQUE DIRECTO 3D AR
+  // ==========================================================
+  function handleTargetAcquired(metrics) {
+    playLaserSound();
+    if (navigator.vibrate) navigator.vibrate([45, 30, 45]);
+
+    resSlantRange.textContent = metrics.slantRange.toLocaleString();
+    resHorizontalDist.textContent = metrics.horizontalDistance.toLocaleString();
+    resDeltaAlt.textContent = `${metrics.deltaHeight > 0 ? '+' : ''}${metrics.deltaHeight}`;
+    
+    if (currentAngleUnit === 'deg') {
+      resPitch.textContent = `${metrics.pitchDeg > 0 ? '+' : ''}${metrics.pitchDeg.toFixed(1)}°`;
+      resAzimuth.textContent = `${metrics.azimuthDeg.toFixed(1)}° Verdadero`;
+    } else {
+      const pMils = Math.round((metrics.pitchDeg / 360.0) * 6400);
+      const aMils = Math.round((metrics.azimuthDeg / 360.0) * 6400);
+      resPitch.textContent = `${pMils > 0 ? '+' : ''}${pMils} ₥`;
+      resAzimuth.textContent = `${aMils} ₥ Verdadero (${metrics.azimuthDeg.toFixed(1)}°)`;
+    }
+
+    resTargetCoords.textContent = `${metrics.targetCoords.lat.toFixed(5)}, ${metrics.targetCoords.lon.toFixed(5)}`;
+    resTargetAlt.textContent = `${metrics.targetCoords.alt} m MSL`;
+
+    lastHitCoords = metrics.targetCoords;
+
+    const obsAlt = (sensorMgr.gps.effectiveAlt || 486.6);
+    const syntheticProfile = [
+      { distance: 0, terrainAlt: (sensorMgr.gps.groundAlt || 485), rayAlt: obsAlt },
+      { distance: Math.round(metrics.slantRange * 0.5), terrainAlt: Math.round(((sensorMgr.gps.groundAlt || 485) + metrics.targetCoords.alt) / 2), rayAlt: Math.round((obsAlt + metrics.targetCoords.alt) / 2) },
+      { distance: metrics.slantRange, terrainAlt: metrics.targetCoords.alt, rayAlt: metrics.targetCoords.alt }
+    ];
+    lastProfileData = { profile: syntheticProfile, obsAlt: obsAlt, hitDistance: metrics.slantRange };
+    drawTerrainProfile(syntheticProfile, obsAlt, metrics.slantRange);
+
+    telemetrySheet.classList.add('open');
+    showToast(`Blanco fijado: ${metrics.slantRange}m (Cota: ${metrics.targetCoords.alt}m MSL)`, 3500);
+
+    // Enviar a Firebase para auditoría y telemetría de campo
+    if (typeof TelemetryLogger !== 'undefined') {
+      const readings = sensorMgr.getReadings();
+      TelemetryLogger.sendTelemetry({
+        mode: '3d_ar_touch',
+        camera3D: {
+          azimuthTrue: metrics.azimuthDeg,
+          pitch: metrics.pitchDeg,
+          roll: readings.rollDeg
+        },
+        gps: {
+          lat: readings.gps.lat || -33.5888,
+          lon: readings.gps.lon || -70.7064,
+          groundAlt: readings.gps.groundAlt || 485,
+          effectiveAlt: obsAlt
+        },
+        result: {
+          hasHit: true,
+          slantRange: metrics.slantRange,
+          horizontalDistance: metrics.horizontalDistance,
+          deltaHeight: metrics.deltaHeight,
+          targetCoords: metrics.targetCoords,
+          message: 'Impacto 3D por toque directo en terreno AR'
+        }
+      });
+    }
+  }
+
+  // ==========================================================
+  // CONMUTADOR DE MODOS: LÁSER vs 3D AR
+  // ==========================================================
+  if (btnModeLaser && btnModeSvs) {
+    btnModeLaser.addEventListener('click', () => {
+      activeOperatingMode = 'laser';
+      btnModeLaser.classList.add('active');
+      btnModeSvs.classList.remove('active');
+      document.body.classList.remove('mode-svs');
+      if (svsToolbar) svsToolbar.style.display = 'none';
+      if (btnMeasure) {
+        btnMeasure.querySelector('.trigger-text').textContent = 'MEDIR DISTANCIA (LÁSER)';
+      }
+      showToast('Modo Láser Activo (Cámara + Trazado Raymarching)');
+    });
+
+    btnModeSvs.addEventListener('click', () => {
+      activeOperatingMode = 'svs';
+      btnModeSvs.classList.add('active');
+      btnModeLaser.classList.remove('active');
+      document.body.classList.add('mode-svs');
+      if (svsToolbar) svsToolbar.style.display = 'flex';
+      if (btnMeasure) {
+        btnMeasure.querySelector('.trigger-text').textContent = '🎯 MEDIR CENTRO / TOCA EL CERRO';
+      }
+      if (typeof Terrain3DView !== 'undefined') {
+        Terrain3DView.resize();
+        if (!sensorMgr.gps.lat) {
+          // Si el GPS aún no tiene posición, precargar cerro de referencia para pruebas
+          Terrain3DView.updateObserverPosition(-33.5888, -70.7064, 485, sensorMgr.postureHeight);
+        }
+      }
+      showToast('Modo 3D AR Activo: Toca el cerro o fija el mapa para calibrar silueta', 4500);
+    });
+  }
+
+  // ==========================================================
+  // BARRA DE HERRAMIENTAS Y CALIBRACIÓN 3D AR
+  // ==========================================================
+  if (btnSvsFreeze) {
+    btnSvsFreeze.addEventListener('click', () => {
+      if (typeof Terrain3DView === 'undefined') return;
+      const isFrozen = Terrain3DView.toggleFrozen();
+      if (isFrozen) {
+        btnSvsFreeze.classList.add('frozen');
+        if (svsFreezeIcon) svsFreezeIcon.textContent = '🔒';
+        if (svsFreezeText) svsFreezeText.textContent = 'Fijado';
+        if (svsStatusBanner) svsStatusBanner.classList.add('calibrating');
+        if (svsBannerText) svsBannerText.textContent = 'Modo Calibración: Arrastra la pantalla para hacer coincidir la silueta con el cerro real';
+        showToast('Mapa 3D fijado. Arrastra con el dedo para alinear con el cerro real', 4000);
+      } else {
+        btnSvsFreeze.classList.remove('frozen');
+        if (svsFreezeIcon) svsFreezeIcon.textContent = '🔓';
+        if (svsFreezeText) svsFreezeText.textContent = 'Fijar Mapa';
+        if (svsStatusBanner) svsStatusBanner.classList.remove('calibrating');
+        if (svsBannerText) svsBannerText.textContent = 'Mapa en vivo: Gira el teléfono hacia el cerro o toca un punto para medir';
+        showToast('Mapa 3D móvil en vivo');
+      }
+    });
+  }
+
+  if (sliderSvsOpacity) {
+    sliderSvsOpacity.addEventListener('input', (e) => {
+      const val = parseInt(e.target.value, 10);
+      if (valSvsOpacity) valSvsOpacity.textContent = `${val}%`;
+      if (typeof Terrain3DView !== 'undefined') {
+        Terrain3DView.setOpacity(val / 100.0);
+      }
+    });
+  }
+
+  if (btnSvsZoomIn && btnSvsZoomOut) {
+    btnSvsZoomIn.addEventListener('click', () => {
+      if (typeof Terrain3DView === 'undefined') return;
+      Terrain3DView.zoomBy(0.9);
+      svsZoomLevel = Number((svsZoomLevel * 1.11).toFixed(1));
+      if (valSvsZoom) valSvsZoom.textContent = `${svsZoomLevel}x`;
+    });
+
+    btnSvsZoomOut.addEventListener('click', () => {
+      if (typeof Terrain3DView === 'undefined') return;
+      Terrain3DView.zoomBy(1.1);
+      svsZoomLevel = Math.max(0.5, Number((svsZoomLevel / 1.11).toFixed(1)));
+      if (valSvsZoom) valSvsZoom.textContent = `${svsZoomLevel}x`;
+    });
+  }
+
+  if (btnSvsWireframe) {
+    let wireframeOn = true;
+    btnSvsWireframe.addEventListener('click', () => {
+      if (typeof Terrain3DView === 'undefined') return;
+      wireframeOn = !wireframeOn;
+      Terrain3DView.setWireframe(wireframeOn);
+      btnSvsWireframe.style.color = wireframeOn ? 'var(--hud-cyan)' : 'var(--text-muted)';
+      showToast(`Malla de crestas: ${wireframeOn ? 'Activada' : 'Oculta'}`);
+    });
+  }
+
+  if (btnSvsReset) {
+    btnSvsReset.addEventListener('click', () => {
+      if (typeof Terrain3DView === 'undefined') return;
+      Terrain3DView.resetCalibration();
+      svsZoomLevel = 1.0;
+      if (valSvsZoom) valSvsZoom.textContent = '1.0x';
+      showToast('Calibración y zoom restablecidos a valores por defecto');
+    });
+  }
+
   // Botón Disparador Láser / Medición Telemetría
   btnMeasure.addEventListener('click', async () => {
+    // Si estamos en Modo 3D AR, disparar raycast al centro exacto de la retícula
+    if (activeOperatingMode === 'svs' && typeof Terrain3DView !== 'undefined') {
+      const centerHit = Terrain3DView.raycastTap(window.innerWidth / 2, window.innerHeight / 2);
+      if (centerHit) {
+        return; // handleTargetAcquired ya fue invocado por el evento interno
+      }
+      showToast('Retícula apuntando al cielo. Toca directamente el cerro en pantalla');
+    }
     playLaserSound();
     if (navigator.vibrate) navigator.vibrate([40, 30, 40]);
 
@@ -505,6 +725,24 @@ document.addEventListener('DOMContentLoaded', () => {
       initSensors();
     }
   }, { once: true });
+
+  // Redimensionar Three.js en cambio de tamaño o rotación de pantalla
+  window.addEventListener('resize', () => {
+    redrawCurrentProfile();
+    if (typeof Terrain3DView !== 'undefined') Terrain3DView.resize();
+  });
+  window.addEventListener('orientationchange', () => {
+    setTimeout(() => {
+      redrawCurrentProfile();
+      if (typeof Terrain3DView !== 'undefined') Terrain3DView.resize();
+    }, 250);
+  });
+
+  // Inicializar Motor 3D AR y registrar escucha de toque directo
+  if (typeof Terrain3DView !== 'undefined' && svsCanvas) {
+    Terrain3DView.init(svsCanvas);
+    Terrain3DView.onTargetSelected(handleTargetAcquired);
+  }
 
   // Iniciar cámara y sensores
   initCamera();
