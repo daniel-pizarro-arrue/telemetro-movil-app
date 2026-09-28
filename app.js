@@ -43,6 +43,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const configPanel = document.getElementById('configPanel');
   const configPanelClose = document.getElementById('configPanelClose');
   const toggleBuildingsBtn = document.getElementById('toggleBuildingsBtn');
+  const changeLocationBtn = document.getElementById('changeLocationBtn');
 
   const resDirectDist = document.getElementById('resDirectDist');
   const resDeltaH = document.getElementById('resDeltaH');
@@ -230,10 +231,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   sensorMgr.startGps();
 
   // ─── 3. FASE: CONFIRMACIÓN DE UBICACIÓN (PIN CENTRAL) ─────────────────────
-  btnConfirmLocation.addEventListener('click', async () => {
+
+  /**
+   * Flujo reutilizable: precarga del área + descenso al suelo + activar HUD de primera persona.
+   * Se llama tanto en la confirmación inicial como al cambiar de ubicación.
+   */
+  async function processConfirmAndDescend() {
     if (!cesiumMap) return;
 
-    // Obtener las coordenadas geográficas y cota del terreno exacta bajo el pin
     const centerCoords = cesiumMap.getCenterCoordinates();
 
     // Guardar para el próximo inicio
@@ -251,25 +256,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (centerLocationPin) centerLocationPin.classList.add('hidden');
     if (btnConfirmLocation) btnConfirmLocation.classList.add('hidden');
 
-    // 1. Mostrar barra de progreso de descarga del mapa y texturas en vista aérea
+    // 1. Mostrar barra de progreso de descarga del mapa
     updateMapProgress(5, 'Iniciando descarga de geometría y texturas (5 km)...');
 
-    // 2. Esperar a que se descargue completamente la malla 3D y texturas en radio de 5km
+    // 2. Precargar malla 3D en radio de 5km (descarga incremental: omite sectores ya en caché)
     await cesiumMap.preloadRadius5km(centerCoords.lat, centerCoords.lng, (percent, label) => {
       updateMapProgress(percent, label);
     });
 
-    // Pequeña pausa visual al alcanzar el 100%
     await new Promise((r) => setTimeout(r, 350));
-
-    // 3. Ocultar la barra de progreso una vez terminada la descarga
     hideMapProgress();
 
-    // 4. AHORA SÍ: Descenso cinemático inmersivo a la cota real del suelo mirando al horizonte
+    // 3. Descenso cinemático inmersivo a la cota real del suelo
     const currentPosture = POSTURES[currentPostureIndex];
     await cesiumMap.descendToGround(centerCoords.lat, centerCoords.lng, centerCoords.alt, currentPosture.height);
 
-    // 5. Activar elementos de primera persona
+    // 4. Activar elementos de primera persona
     compassRibbon.classList.remove('hidden');
     postureBtn.classList.remove('hidden');
     modeToggleBtn.classList.remove('hidden');
@@ -279,7 +281,53 @@ document.addEventListener('DOMContentLoaded', async () => {
     bottomActions.classList.remove('hidden');
 
     showToast('Entorno 3D listo. Posición confirmada.', 3500);
+  }
+
+  btnConfirmLocation.addEventListener('click', async () => {
+    await processConfirmAndDescend();
   });
+
+  // ─── 3.1. CAMBIAR UBICACIÓN (desde panel de configuración) ─────────────────
+  if (changeLocationBtn) {
+    changeLocationBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!cesiumMap) return;
+
+      // Cerrar el panel de configuración
+      closeConfigPanel();
+
+      // Ocultar todos los elementos de primera persona
+      compassRibbon.classList.add('hidden');
+      postureBtn.classList.add('hidden');
+      modeToggleBtn.classList.add('hidden');
+      if (configBtn) configBtn.classList.add('hidden');
+      if (heightControlWidget) heightControlWidget.classList.add('hidden');
+      reticleContainer.classList.add('hidden');
+      bottomActions.classList.add('hidden');
+      if (telemetryCard) telemetryCard.classList.add('hidden');
+
+      // Limpiar el objetivo si hay uno dibujado
+      cesiumMap.clearTarget();
+
+      // Desactivar brújula si estaba activa
+      if (isCompassActive) {
+        isCompassActive = false;
+        modeToggleBtn.classList.remove('active');
+        cesiumMap.setControlMode('aerial');
+      }
+
+      // Volver a vista aérea sobre la última posición confirmada
+      cesiumMap.setAerialView(cesiumMap.userLat, cesiumMap.userLng, 600, true);
+
+      // Mostrar el pin y el botón de confirmación de nuevo
+      hasConfirmedLocation = false;
+      if (centerLocationPin) centerLocationPin.classList.remove('hidden');
+      if (btnConfirmLocation) btnConfirmLocation.classList.remove('hidden');
+
+      showToast('📍 Reposiciona el pin y toca CONFIRMAR', 4000);
+    });
+  }
+
 
   // ─── 4. BOTÓN DE POSTURA (DE PIE / ARRODILLADO / TENDIDO) ─────────────────
   postureBtn.addEventListener('click', () => {

@@ -834,3 +834,36 @@ html, body {
 .height-stepper-widget {
   pointer-events: auto;
 }
+
+/* Divisor dentro del panel de configuración */
+.config-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.07);
+  margin: 2px 16px;
+}
+
+/* Botón de acción (no toggle) en el panel de configuración */
+.config-action-btn {
+  background: rgba(0, 240, 255, 0.1);
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  border-radius: 10px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cyan-bright);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.18s ease;
+}
+
+.config-action-btn:hover {
+  background: rgba(0, 240, 255, 0.22);
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.35);
+}
+
+.config-action-btn:active {
+  transform: scale(0.9);
+  background: rgba(0, 240, 255, 0.35);
+}

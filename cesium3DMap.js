@@ -46,6 +46,7 @@
       // Capa de edificios y estructuras 3D (activado por defecto)
       this.showBuildings = true;
       this._terrainImageryLayer = null; // Capa satelital ESRI usada cuando los edificios están ocultos
+      this._downloadedAreas = [];      // Áreas ya precargadas [{lat, lng, radius}] para descarga incremental
 
       this.onTargetMeasured = null;
       this.onStatusChange = null;
@@ -582,6 +583,14 @@
 
       for (let i = 0; i < ringBatches.length; i++) {
         const batch = ringBatches[i];
+
+        // Si este anillo ya está cubierto por una descarga anterior, saltarlo (Cesium usa caché)
+        if (this._isRingCovered(lat, lng, batch.dist)) {
+          if (onProgress) onProgress(batch.targetPct, `✓ ${batch.label} (en caché — omitido)`);
+          await new Promise((r) => setTimeout(r, 25)); // Pausa mínima para actualizar UI
+          continue;
+        }
+
         const cartos = [];
         if (GeoMath?.destinationPoint) {
           const step = 360 / batch.count;
@@ -613,7 +622,24 @@
       if (onProgress) {
         onProgress(100, 'Mapa 3D y texturas descargadas al 100%');
       }
+      // Registrar área como descargada para futuras descargas incrementales
+      this._downloadedAreas.push({ lat, lng, radius: 5000 });
       this._notifyStatus('✅ Malla 3D (5 km) precargada en memoria');
+    }
+
+    /**
+     * Determina si un anillo de muestreo a `ringDist` metros de (lat, lng) ya está
+     * completamente cubierto por una descarga anterior. Usa la prueba: si la distancia
+     * entre el nuevo centro y el centro previo más el radio del anillo es menor o igual
+     * al radio del área ya descargada, todos los puntos del anillo están en caché.
+     */
+    _isRingCovered(lat, lng, ringDist) {
+      const GeoMath = window.GeoMath;
+      if (!GeoMath || this._downloadedAreas.length === 0) return false;
+      return this._downloadedAreas.some(area => {
+        const centerDist = GeoMath.haversineDistance(lat, lng, area.lat, area.lng);
+        return (centerDist + ringDist) <= area.radius;
+      });
     }
 
     /**
