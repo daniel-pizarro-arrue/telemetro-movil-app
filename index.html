@@ -35,10 +35,11 @@
         <span id="gpsText" class="gps-label">BUSCANDO...</span>
       </div>
 
-      <!-- Cinta de Azimut en Milésimas (visible en primera persona) -->
+      <!-- Cinta de Azimut en Milésimas y Zoom Óptico (visible en primera persona) -->
       <div class="compass-ribbon hidden" id="compassRibbon">
         <span class="compass-cardinal" id="compassCardinal">N</span>
         <span class="compass-value" id="compassHeadingMils">0000 ₥</span>
+        <span class="compass-zoom" id="opticsZoomLevel" title="Aumento óptico">1.0x</span>
       </div>
 
       <!-- Grupo de Botones de la Cabecera -->
@@ -47,10 +48,11 @@
         <button id="postureBtn" class="hud-icon-btn hidden" title="Cambiar Postura: De pie (1.6m)">
           <span id="postureIcon" class="posture-icon">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 21h16" stroke-width="1.5" opacity="0.3"/>
               <circle cx="12" cy="4" r="2" fill="currentColor"/>
-              <line x1="12" y1="6" x2="12" y2="13"/>
-              <line x1="9" y1="9" x2="15" y2="9"/>
-              <polyline points="9,20 12,13 15,20"/>
+              <path d="M12 6.5v7"/>
+              <path d="M8 10h8"/>
+              <path d="M9 21l3-7.5 3 7.5"/>
             </svg>
           </span>
         </button>

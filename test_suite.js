@@ -74,6 +74,46 @@ assert.strictEqual(utm.zoneLetter, 'H');
 assert(utm.easting > 340000 && utm.easting < 350000, `Easting fuera de rango: ${utm.easting}`);
 assert(utm.northing > 6290000 && utm.northing < 6305000, `Northing fuera de rango: ${utm.northing}`);
 
+console.log('--- TEST CESIUM CONTROLLER LOGIC (FOV & POSTURES) ---');
+const Cesium3DMap = require('./cesium3DMap.js');
+const mapCtrl = new Cesium3DMap('dummyContainer', { initialLat: -33.45, initialLng: -70.67, initialAlt: 560 });
+
+// Test FOV inicial y aumentos
+assert.strictEqual(mapCtrl.currentFov, 60.0);
+assert.strictEqual(mapCtrl.getZoomMagnification(), 1.0);
+
+const mag2x = mapCtrl.setFov(30.0);
+console.log(`Zoom 30° FOV: ${mag2x.toFixed(1)}x (esperado 2.0x)`);
+assert.strictEqual(mag2x, 2.0);
+
+const mag10x = mapCtrl.setFov(6.0);
+console.log(`Zoom 6° FOV: ${mag10x.toFixed(1)}x (esperado 10.0x)`);
+assert.strictEqual(mag10x, 10.0);
+
+// Test clamping
+mapCtrl.setFov(2.0);
+assert.strictEqual(mapCtrl.currentFov, 5.0, 'Debe clamplear a min 5°');
+mapCtrl.setFov(100.0);
+assert.strictEqual(mapCtrl.currentFov, 75.0, 'Debe clamplear a max 75°');
+
+// Test Cota de suelo y Posturas (1.6m de pie, 0.9m arrodillado, 0.3m tendido)
+const groundElevation = 562.5;
+mapCtrl.groundAltitudeLocked = groundElevation;
+mapCtrl.postureHeight = 1.6;
+let camAlt = mapCtrl.groundAltitudeLocked + mapCtrl.postureHeight;
+console.log(`Cámara de pie (1.6m sobre ${groundElevation}m): ${camAlt.toFixed(2)}m`);
+assert.strictEqual(camAlt, 564.1);
+
+mapCtrl.setPostureHeight(0.9);
+camAlt = mapCtrl.groundAltitudeLocked + mapCtrl.postureHeight;
+console.log(`Cámara arrodillado (0.9m sobre ${groundElevation}m): ${camAlt.toFixed(2)}m`);
+assert.strictEqual(camAlt, 563.4);
+
+mapCtrl.setPostureHeight(0.3);
+camAlt = mapCtrl.groundAltitudeLocked + mapCtrl.postureHeight;
+console.log(`Cámara tendido (0.3m sobre ${groundElevation}m): ${camAlt.toFixed(2)}m`);
+assert.strictEqual(camAlt, 562.8);
+
 console.log('✅ TODOS LOS TESTS PASARON EXITOSAMENTE');
 
 

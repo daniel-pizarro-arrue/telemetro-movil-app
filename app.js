@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const compassRibbon = document.getElementById('compassRibbon');
   const compassHeadingMils = document.getElementById('compassHeadingMils');
   const compassCardinal = document.getElementById('compassCardinal');
+  const opticsZoomLevel = document.getElementById('opticsZoomLevel');
 
   const centerLocationPin = document.getElementById('centerLocationPin');
   const locationConfirmCard = document.getElementById('locationConfirmCard');
@@ -74,27 +75,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // ─── POSTURAS TÁCTICAS DEL OBSERVADOR (SVGs SOBRIOS) ───────────────────
+  // ─── POSTURAS TÁCTICAS DEL OBSERVADOR (SVGs ANATÓMICOS Y SOBRIOS) ───────
   const POSTURE_SVGS = {
     standing: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 21h16" stroke-width="1.5" opacity="0.3"/>
       <circle cx="12" cy="4" r="2" fill="currentColor"/>
-      <line x1="12" y1="6" x2="12" y2="13"/>
-      <line x1="9" y1="9" x2="15" y2="9"/>
-      <polyline points="9,20 12,13 15,20"/>
+      <path d="M12 6.5v7"/>
+      <path d="M8 10h8"/>
+      <path d="M9 21l3-7.5 3 7.5"/>
     </svg>`,
     kneeling: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="9" cy="5" r="2" fill="currentColor"/>
-      <path d="M9 7v6l4 1"/>
-      <path d="M7 10h4"/>
-      <path d="M13 14v6"/>
-      <line x1="8" y1="20" x2="14" y2="20"/>
+      <path d="M3 21h18" stroke-width="1.5" opacity="0.3"/>
+      <circle cx="10" cy="6" r="2" fill="currentColor"/>
+      <path d="M10 8l-1 6"/>
+      <path d="M9 14l-4 7"/>
+      <path d="M9 14l6 1v6"/>
+      <path d="M10 9.5l5 5.5"/>
     </svg>`,
     prone: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="5" cy="13" r="2" fill="currentColor"/>
-      <line x1="7" y1="14" x2="17" y2="14"/>
-      <polyline points="7,16 9,14 11,16"/>
-      <polyline points="15,14 19,17 21,16"/>
-      <line x1="2" y1="19" x2="22" y2="19" stroke-dasharray="2 2" opacity="0.6"/>
+      <path d="M3 21h18" stroke-width="1.5" opacity="0.3"/>
+      <circle cx="6" cy="14" r="2" fill="currentColor"/>
+      <path d="M8 16l6 1.5 7 1.5"/>
+      <path d="M8.5 16l-1.5 5 3-3"/>
     </svg>`
   };
 
@@ -114,6 +116,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (parsed.lat && parsed.lng) {
         initialLocation.lat = parsed.lat;
         initialLocation.lng = parsed.lng;
+        if (parsed.alt) initialLocation.alt = parsed.alt;
       }
     }
   } catch (e) {}
@@ -146,6 +149,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       const mils = GeoMath ? GeoMath.degreesToMils(heading) : Math.round((heading * 6400) / 360);
       compassHeadingMils.textContent = GeoMath ? GeoMath.formatMils(mils) : `${mils} ₥`;
       compassCardinal.textContent = getCardinal(heading);
+    };
+
+    // Actualizar indicador de aumento óptico en zoom / pellizco
+    cesiumMap.onZoomChanged = (magnification, fov) => {
+      if (opticsZoomLevel) {
+        opticsZoomLevel.textContent = `${magnification.toFixed(1)}x`;
+      }
     };
 
     await cesiumMap.init();
@@ -197,14 +207,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   btnConfirmLocation.addEventListener('click', async () => {
     if (!cesiumMap) return;
 
-    // Obtener las coordenadas exactas del centro de la pantalla bajo el pin
+    // Obtener las coordenadas geográficas y cota del terreno exacta bajo el pin
     const centerCoords = cesiumMap.getCenterCoordinates();
 
     // Guardar para el próximo inicio
     try {
       localStorage.setItem('telemetro_last_pos', JSON.stringify({
         lat: centerCoords.lat,
-        lng: centerCoords.lng
+        lng: centerCoords.lng,
+        alt: centerCoords.alt
       }));
     } catch (e) {}
 
@@ -214,9 +225,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (centerLocationPin) centerLocationPin.classList.add('hidden');
     if (btnConfirmLocation) btnConfirmLocation.classList.add('hidden');
 
-    // Descenso cinemático suave mirando al horizonte
+    // Descenso cinemático suave a la cota real del suelo mirando al horizonte
     const currentPosture = POSTURES[currentPostureIndex];
-    await cesiumMap.descendToGround(centerCoords.lat, centerCoords.lng, currentPosture.height);
+    await cesiumMap.descendToGround(centerCoords.lat, centerCoords.lng, centerCoords.alt, currentPosture.height);
 
     // Activar elementos de primera persona
     compassRibbon.classList.remove('hidden');

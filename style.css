@@ -178,6 +178,15 @@ html, body {
   letter-spacing: 0.5px;
 }
 
+.compass-zoom {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--amber-accent);
+  padding-left: 8px;
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+  letter-spacing: 0.5px;
+}
+
 /* Botones de Icono en Header (Brújula y Postura) */
 .hud-icon-btn {
   background: rgba(15, 23, 42, 0.85);

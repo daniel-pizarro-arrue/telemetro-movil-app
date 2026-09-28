@@ -40,9 +40,13 @@
       this.sightLineEntity = null;
       this._cachedDestination = null;
 
+      // Óptica y zoom (FOV en grados: 60° = 1.0x, 6° = 10.0x)
+      this.currentFov = 60.0;
+
       this.onTargetMeasured = null;
       this.onStatusChange = null;
       this.onOrientationChanged = null; // (heading, pitch) => {}
+      this.onZoomChanged = null; // (magnification, fov) => {}
     }
 
     async init() {
@@ -141,37 +145,154 @@
       }
     }
 
+    /**
+     * Ajusta el campo de visión (FOV) para zoom óptico tipo telescopio sin desplazar la posición
+     */
+    setFov(fovDegrees) {
+      this.currentFov = Math.max(5.0, Math.min(75.0, fovDegrees));
+      if (this.viewer?.camera?.frustum && typeof this.viewer.camera.frustum.fov !== 'undefined') {
+        const Cesium = window.Cesium;
+        this.viewer.camera.frustum.fov = Cesium.Math.toRadians(this.currentFov);
+      }
+      const magnification = 60.0 / this.currentFov;
+      if (this.onZoomChanged) {
+        this.onZoomChanged(magnification, this.currentFov);
+      }
+      return magnification;
+    }
+
+    getZoomMagnification() {
+      return 60.0 / this.currentFov;
+    }
+
     _setupInteraction() {
       const Cesium = window.Cesium;
       const canvas = this.viewer.scene.canvas;
 
-      // Variables de arrastre táctil para rotar la cámara in-place (horizontal y vertical)
+      // Variables de control táctil (1 dedo = rotación in-place, 2 dedos = pellizco zoom)
       let isDragging = false;
+      let isPinching = false;
       let startX = 0;
       let startY = 0;
       let startHeading = 0;
       let startPitch = 0;
       let movedDist = 0;
+      let touchStartTime = 0;
+      let startPinchDist = 0;
+      let startFovOnPinch = 60;
 
-      canvas.addEventListener('pointerdown', (e) => {
+      // ─── GESTIÓN DE EVENTOS TÁCTILES MÓVILES (TOUCH EVENTS) ───
+      canvas.addEventListener('touchstart', (e) => {
         if (this.controlMode !== 'first_person_free') return;
-        isDragging = true;
-        startX = e.clientX;
-        startY = e.clientY;
+
+        if (e.touches.length === 1 && !isPinching) {
+          isDragging = true;
+          startX = e.touches[0].clientX;
+          startY = e.touches[0].clientY;
+          startHeading = this.heading;
+          startPitch = this.pitch;
+          movedDist = 0;
+          touchStartTime = Date.now();
+        } else if (e.touches.length >= 2) {
+          // Gesto de pellizco (Pinch to Zoom): BLOQUEO INMEDIATO DE ROTACIÓN
+          isDragging = false;
+          isPinching = true;
+          const p1 = e.touches[0];
+          const p2 = e.touches[1];
+          startPinchDist = Math.hypot(p1.clientX - p2.clientX, p1.clientY - p2.clientY);
+          startFovOnPinch = this.currentFov;
+        }
+      }, { passive: false });
+
+      canvas.addEventListener('touchmove', (e) => {
+        if (this.controlMode !== 'first_person_free') return;
+        e.preventDefault(); // Evita scroll y gestos nativos del navegador
+
+        if (isPinching && e.touches.length >= 2) {
+          const p1 = e.touches[0];
+          const p2 = e.touches[1];
+          const currentDist = Math.hypot(p1.clientX - p2.clientX, p1.clientY - p2.clientY);
+          if (startPinchDist > 8) {
+            const scale = currentDist / startPinchDist;
+            // Mayor distancia entre dedos -> mayor acercamiento -> fov menor
+            const targetFov = startFovOnPinch / scale;
+            this.setFov(targetFov);
+          }
+          return; // Prohibido rotar mientras existan 2 o más dedos
+        }
+
+        if (isDragging && e.touches.length === 1 && !isPinching) {
+          const dx = e.touches[0].clientX - startX;
+          const dy = e.touches[0].clientY - startY;
+          movedDist += Math.abs(dx) + Math.abs(dy);
+
+          // Sensibilidad táctil ajustada al zoom óptico (a mayor aumento, movimiento más suave y fino)
+          const fovFactor = this.currentFov / 60.0;
+          const sensitivity = 0.22 * Math.max(0.2, fovFactor);
+
+          this.heading = (startHeading + dx * sensitivity + 360) % 360;
+          this.pitch = Math.max(-88, Math.min(88, startPitch - dy * sensitivity));
+
+          this.updateCameraOrientation();
+
+          if (this.onOrientationChanged) {
+            this.onOrientationChanged(this.heading, this.pitch);
+          }
+        }
+      }, { passive: false });
+
+      const onTouchEnd = (e) => {
+        if (this.controlMode !== 'first_person_free') return;
+
+        if (e.touches.length < 2 && isPinching) {
+          // Finaliza el pellizco. Si aún queda un dedo, evitar tirón brusco
+          isPinching = false;
+          isDragging = false;
+        }
+
+        if (e.touches.length === 0) {
+          // Si fue un toque sin arrastre (< 10px y < 350ms), medir objetivo
+          if (isDragging && movedDist < 10 && (Date.now() - touchStartTime) < 350) {
+            const rect = canvas.getBoundingClientRect();
+            const pos = new Cesium.Cartesian2(startX - rect.left, startY - rect.top);
+            this.measureAtScreenPosition(pos);
+          }
+          isDragging = false;
+          isPinching = false;
+        }
+      };
+
+      canvas.addEventListener('touchend', onTouchEnd);
+      canvas.addEventListener('touchcancel', onTouchEnd);
+
+      // ─── GESTIÓN DE EVENTOS DE RATÓN (DESKTOP) ───
+      let isMouseDown = false;
+      let mouseStartX = 0;
+      let mouseStartY = 0;
+      let mouseMovedDist = 0;
+      let mouseDownTime = 0;
+
+      canvas.addEventListener('mousedown', (e) => {
+        if (this.controlMode !== 'first_person_free') return;
+        if (e.button !== 0) return;
+        isMouseDown = true;
+        mouseStartX = e.clientX;
+        mouseStartY = e.clientY;
         startHeading = this.heading;
         startPitch = this.pitch;
-        movedDist = 0;
-        try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+        mouseMovedDist = 0;
+        mouseDownTime = Date.now();
       });
 
-      canvas.addEventListener('pointermove', (e) => {
-        if (!isDragging || this.controlMode !== 'first_person_free') return;
-        const dx = e.clientX - startX;
-        const dy = e.clientY - startY;
-        movedDist += Math.abs(dx) + Math.abs(dy);
+      window.addEventListener('mousemove', (e) => {
+        if (!isMouseDown || this.controlMode !== 'first_person_free') return;
+        const dx = e.clientX - mouseStartX;
+        const dy = e.clientY - mouseStartY;
+        mouseMovedDist += Math.abs(dx) + Math.abs(dy);
 
-        // Sensibilidad táctil: rotación horizontal (rumbo) y vertical (inclinación)
-        const sensitivity = 0.22;
+        const fovFactor = this.currentFov / 60.0;
+        const sensitivity = 0.22 * Math.max(0.2, fovFactor);
+
         this.heading = (startHeading + dx * sensitivity + 360) % 360;
         this.pitch = Math.max(-88, Math.min(88, startPitch - dy * sensitivity));
 
@@ -182,22 +303,24 @@
         }
       });
 
-      const onPointerEnd = (e) => {
-        if (isDragging) {
-          isDragging = false;
-          try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
-
-          // Si fue un toque sin arrastre significativo (< 8px), medir el objetivo
-          if (movedDist < 8 && this.controlMode !== 'aerial') {
+      window.addEventListener('mouseup', (e) => {
+        if (isMouseDown) {
+          isMouseDown = false;
+          if (mouseMovedDist < 8 && (Date.now() - mouseDownTime) < 350 && this.controlMode !== 'aerial') {
             const rect = canvas.getBoundingClientRect();
             const pos = new Cesium.Cartesian2(e.clientX - rect.left, e.clientY - rect.top);
             this.measureAtScreenPosition(pos);
           }
         }
-      };
+      });
 
-      canvas.addEventListener('pointerup', onPointerEnd);
-      canvas.addEventListener('pointercancel', onPointerEnd);
+      // Zoom con rueda de ratón en modo inmersivo
+      canvas.addEventListener('wheel', (e) => {
+        if (this.controlMode !== 'first_person_free') return;
+        e.preventDefault();
+        const step = e.deltaY > 0 ? 3.0 : -3.0;
+        this.setFov(this.currentFov + step);
+      }, { passive: false });
     }
 
     /**
@@ -237,10 +360,12 @@
     }
 
     /**
-     * Obtiene las coordenadas geográficas exactas del punto al centro de la pantalla
+     * Obtiene las coordenadas geográficas y cota de superficie exactas bajo el pin central
      */
     getCenterCoordinates() {
-      if (!this.viewer || !this.viewer.scene) return { lat: this.userLat, lng: this.userLng, alt: this.userAlt };
+      if (!this.viewer || !this.viewer.scene) {
+        return { lat: this.userLat, lng: this.userLng, alt: this.userAlt };
+      }
       const Cesium = window.Cesium;
       const canvas = this.viewer.scene.canvas;
       const centerScreen = new Cesium.Cartesian2(canvas.clientWidth / 2, canvas.clientHeight / 2);
@@ -259,10 +384,11 @@
 
       if (cartesian) {
         const carto = Cesium.Cartographic.fromCartesian(cartesian);
+        const alt = carto.height;
         return {
           lat: Cesium.Math.toDegrees(carto.latitude),
           lng: Cesium.Math.toDegrees(carto.longitude),
-          alt: carto.height
+          alt: (typeof alt === 'number' && !isNaN(alt) && Math.abs(alt) > 0.1) ? alt : this.userAlt
         };
       }
 
@@ -271,10 +397,17 @@
 
     /**
      * Desciende suavemente la cámara desde la vista aérea hacia el suelo y se inclina mirando al horizonte
+     * Admite firmas: (lat, lng, postureHeight) o (lat, lng, groundAlt, postureHeight)
      */
-    async descendToGround(confirmedLat, confirmedLng, postureHeight = 1.6) {
+    async descendToGround(confirmedLat, confirmedLng, groundAlt = null, postureHeight = 1.6) {
       if (!this.viewer) return;
       const Cesium = window.Cesium;
+
+      // Compatibilidad si fue llamado como descendToGround(lat, lng, postureHeight)
+      if (typeof groundAlt === 'number' && groundAlt <= 3.0 && postureHeight === 1.6) {
+        postureHeight = groundAlt;
+        groundAlt = null;
+      }
 
       this.userLat = confirmedLat;
       this.userLng = confirmedLng;
@@ -282,34 +415,77 @@
 
       this._notifyStatus('Descendiendo a posición en tierra...');
 
-      // Muestrear o aproximar cota del suelo
-      let groundH = this.userAlt;
-      try {
-        const carto = Cesium.Cartographic.fromDegrees(this.userLng, this.userLat);
-        const sampled = this.viewer.scene.sampleHeight(carto);
-        if (typeof sampled === 'number' && !isNaN(sampled) && sampled > -200) {
-          groundH = sampled;
-        }
-      } catch (e) {}
+      // Determinar la cota real del suelo
+      let groundH = groundAlt;
+      if (typeof groundH !== 'number' || isNaN(groundH) || Math.abs(groundH) < 0.1) {
+        groundH = null;
+      }
+
+      // Si no vino altitud o vino nula, muestrear con pickPosition en el centro de pantalla
+      if (groundH == null) {
+        try {
+          const canvas = this.viewer.scene.canvas;
+          const centerScreen = new Cesium.Cartesian2(canvas.clientWidth / 2, canvas.clientHeight / 2);
+          const picked = this.viewer.scene.pickPosition(centerScreen);
+          if (picked) {
+            const carto = Cesium.Cartographic.fromCartesian(picked);
+            if (typeof carto.height === 'number' && !isNaN(carto.height) && Math.abs(carto.height) > 0.1) {
+              groundH = carto.height;
+            }
+          }
+        } catch (_) {}
+      }
+
+      // Si aún no se detectó, intentar clampToHeight
+      if (groundH == null) {
+        try {
+          const testPos = Cesium.Cartesian3.fromDegrees(this.userLng, this.userLat, 0);
+          const clamped = this.viewer.scene.clampToHeight(testPos);
+          if (clamped) {
+            const carto = Cesium.Cartographic.fromCartesian(clamped);
+            if (typeof carto.height === 'number' && !isNaN(carto.height) && Math.abs(carto.height) > 0.1) {
+              groundH = carto.height;
+            }
+          }
+        } catch (_) {}
+      }
+
+      // Fallback final razonable si no se pudo determinar
+      if (groundH == null) {
+        groundH = (this.userAlt && this.userAlt !== 600) ? this.userAlt : 560;
+      }
 
       this.groundAltitudeLocked = groundH;
       this.userAlt = groundH;
 
+      // Restablecer zoom inicial a 1.0x (60° fov)
+      this.setFov(60.0);
+
       const totalCamAlt = this.groundAltitudeLocked + this.postureHeight;
       this._cachedDestination = Cesium.Cartesian3.fromDegrees(this.userLng, this.userLat, totalCamAlt);
+
+      this.heading = 0;
+      this.pitch = -2.0;
+      this.roll = 0.0;
 
       // Transición cinemática suave: descenso con tilt hacia el horizonte (-2 grados)
       return new Promise((resolve) => {
         this.viewer.camera.flyTo({
           destination: this._cachedDestination,
           orientation: {
-            heading: Cesium.Math.toRadians(0),
-            pitch: Cesium.Math.toRadians(-2.0),
+            heading: Cesium.Math.toRadians(this.heading),
+            pitch: Cesium.Math.toRadians(this.pitch),
             roll: 0.0
           },
           duration: 3.0,
           complete: () => {
             this.setControlMode('first_person_free');
+            if (this.onOrientationChanged) {
+              this.onOrientationChanged(this.heading, this.pitch);
+            }
+            if (this.onZoomChanged) {
+              this.onZoomChanged(1.0, this.currentFov);
+            }
             resolve();
           }
         });
